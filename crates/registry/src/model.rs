@@ -334,6 +334,7 @@ impl Registry {
             UniqueJsonError::DuplicateKey => RegistryError::DuplicateJsonKey,
             UniqueJsonError::Malformed => RegistryError::MalformedJson,
         })?;
+        validate_no_control_characters(&value)?;
         validate_schema(&value)?;
         let registry: Self = serde_json::from_value(value)
             .map_err(|_| RegistryError::Schema("registry fields are malformed".into()))?;
@@ -391,6 +392,32 @@ impl Registry {
                         .any(|indicator| indicator.value.to_lowercase().contains(&needle))
             })
             .collect()
+    }
+}
+
+fn validate_no_control_characters(value: &Value) -> Result<(), RegistryError> {
+    match value {
+        Value::String(string) if string.chars().any(char::is_control) => Err(
+            RegistryError::Semantic("registry strings must not contain control characters".into()),
+        ),
+        Value::Array(values) => {
+            for value in values {
+                validate_no_control_characters(value)?;
+            }
+            Ok(())
+        }
+        Value::Object(values) => {
+            for (key, value) in values {
+                if key.chars().any(char::is_control) {
+                    return Err(RegistryError::Semantic(
+                        "registry object keys must not contain control characters".into(),
+                    ));
+                }
+                validate_no_control_characters(value)?;
+            }
+            Ok(())
+        }
+        _ => Ok(()),
     }
 }
 

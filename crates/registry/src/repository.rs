@@ -130,3 +130,128 @@ fn safe_relative_path(value: &str) -> bool {
         && value.is_ascii()
         && value.split('/').all(safe_component)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    fn repository_root() -> tempfile::TempDir {
+        let root = tempdir().expect("repository root is created");
+        fs::create_dir(root.path().join("targets")).expect("targets directory is created");
+        root
+    }
+
+    #[tokio::test]
+    async fn rejects_unsafe_target_paths() {
+        let root = repository_root();
+        let repository = DirectoryRepository::open(root.path()).expect("repository opens");
+
+        for path in [
+            "../outside",
+            "/absolute",
+            "nested/../../outside",
+            "C:\\outside",
+            "",
+        ] {
+            assert!(
+                repository.fetch_target(path, 1024).await.is_err(),
+                "unsafe target path {path:?} must be rejected"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_symlink_targets() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let root = repository_root();
+            let outside = root.path().join("outside");
+            fs::write(&outside, b"external target").expect("outside target is written");
+            symlink(&outside, root.path().join("targets/registry-v3.json"))
+                .expect("target symlink is created");
+            let repository = DirectoryRepository::open(root.path()).expect("repository opens");
+
+            assert!(
+                repository
+                    .fetch_target("registry-v3.json", 1024)
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_symlink_repository_root_and_area() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let parent = tempdir().expect("test parent is created");
+            let actual_root = parent.path().join("actual-root");
+            fs::create_dir(&actual_root).expect("actual repository root is created");
+            fs::create_dir(actual_root.join("targets")).expect("targets directory is created");
+            let root_link = parent.path().join("root-link");
+            symlink(&actual_root, &root_link).expect("root symlink is created");
+            assert!(DirectoryRepository::open(&root_link).is_err());
+
+            let repository_root = parent.path().join("repository");
+            fs::create_dir(&repository_root).expect("repository root is created");
+            fs::create_dir(repository_root.join("real-targets"))
+                .expect("real target directory is created");
+            symlink(
+                repository_root.join("real-targets"),
+                repository_root.join("targets"),
+            )
+            .expect("targets area symlink is created");
+            let repository = DirectoryRepository::open(&repository_root).expect("root opens");
+
+            assert!(
+                repository
+                    .fetch_target("registry-v3.json", 1024)
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_symlink_metadata_files() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+
+            let root = repository_root();
+            fs::create_dir(root.path().join("metadata")).expect("metadata directory is created");
+            let outside = root.path().join("outside-metadata");
+            fs::write(&outside, b"external metadata").expect("outside metadata is written");
+            symlink(&outside, root.path().join("metadata/timestamp.json"))
+                .expect("metadata symlink is created");
+            let repository = DirectoryRepository::open(root.path()).expect("repository opens");
+
+            assert!(
+                repository
+                    .fetch_metadata("timestamp.json", 1024)
+                    .await
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_targets_over_the_requested_limit() {
+        let root = repository_root();
+        fs::write(root.path().join("targets/registry-v3.json"), b"four")
+            .expect("target is written");
+        let repository = DirectoryRepository::open(root.path()).expect("repository opens");
+
+        assert!(
+            repository
+                .fetch_target("registry-v3.json", 3)
+                .await
+                .is_err()
+        );
+    }
+}

@@ -410,6 +410,136 @@ async fn rejects_malformed_metadata_safely() {
 }
 
 #[tokio::test]
+async fn rejects_missing_required_metadata() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    fs::remove_file(repository.path().join("metadata/timestamp.json"))
+        .expect("test removes required timestamp metadata");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("missing required metadata must fail closed");
+
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidMetadata
+    );
+}
+
+#[tokio::test]
+async fn rejects_a_malformed_pinned_bootstrap_root() {
+    let signer = Signer::generate();
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let malformed_root = b"{malformed pinned root";
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        malformed_root,
+        &pin(malformed_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("a matching pin cannot make malformed root metadata valid");
+
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidRoot
+    );
+}
+
+#[tokio::test]
+async fn rejects_a_bootstrap_root_with_malformed_public_key_material() {
+    let signer = Signer::generate();
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let mut signed = root_signed(&signer, 1);
+    signed["keys"][&signer.id]["keyval"]["public"] = json!("not a PEM public key");
+    let malformed_key_root = envelope(&signed, &[&signer]);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &malformed_key_root,
+        &pin(&malformed_key_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("malformed pinned public key material must fail root parsing");
+
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidRoot
+    );
+}
+
+#[tokio::test]
+async fn rejects_invalid_timestamp_signatures() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let timestamp_path = repository.path().join("metadata/timestamp.json");
+    let mut timestamp: Value =
+        serde_json::from_slice(&fs::read(&timestamp_path).expect("timestamp metadata is readable"))
+            .expect("timestamp metadata parses for mutation");
+    timestamp["signatures"][0]["sig"] = json!("00".repeat(64));
+    fs::write(
+        &timestamp_path,
+        serde_json::to_vec(&timestamp).expect("mutated metadata serializes"),
+    )
+    .expect("mutated metadata replaces original");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("invalid timestamp signature must fail verification");
+
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidSignature
+    );
+}
+
+#[tokio::test]
+async fn rejects_an_oversized_registry_target_at_the_transport_boundary() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let oversized_target = vec![b' '; equalturn_registry::REGISTRY_MAX_BYTES + 1];
+    let repository = temporary_repository(&signer, &oversized_target, 1);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("target transport limit must reject an oversized signed target");
+
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidTarget
+    );
+}
+
+#[tokio::test]
 async fn attacker_cannot_replace_remote_root_and_all_metadata_after_bootstrap() {
     let trusted_signer = Signer::generate();
     let attacker_signer = Signer::generate();

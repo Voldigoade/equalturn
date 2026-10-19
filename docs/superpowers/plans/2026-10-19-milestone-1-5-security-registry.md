@@ -87,6 +87,18 @@ Focused verification observed before the Stage 16 checkpoint:
 
 The CLI end-to-end test generates a process-local ephemeral TUF repository and verifies successful `verify`, `inspect`, and `search` output without relay configuration. A separate invocation supplies a mismatched root pin and observes `INVALID_ROOT` plus a failing exit status. Test keys and repositories remain in temporary directories.
 
+### Recovery and Stage 17 — adversarial registry inputs
+
+After the development application was terminated, the checkout was inspected before changes. The working branch was `work/milestone-1.5-registry-hardening`, HEAD and the fetched remote branch both pointed to `3a08e86cd5eaae719a02dd5a2c1b55797312cd95`, and the worktree contained only the in-progress untracked adversarial registry test file. The local branch has no upstream tracking configuration, so the remote branch was compared by its explicit ref. Stage 3 itself was already committed as `350dc5a` and pushed; no Stage 3 edits were recreated or overwritten. Focused Unix persistence verification observed 28 passing tests. The `equalturn-key-protection` crate compiled and its test target ran, but it contains no crate-local tests; real DPAPI coverage remains on Windows CI.
+
+Stage 17 adds adversarial parser, filesystem repository, and real TUF verifier coverage. Registry parsing now rejects C0/C1 control characters in every string and object key before schema decoding, preventing terminal control injection while allowing ordinary Unicode product labels. Tests cover path traversal and absolute target names, static repository-root/area/metadata/target symlinks on Unix, requested target-size limits, deep JSON, raw NUL, terminal controls, hostname homographs, Unicode product names, schema string/entry bounds, malformed UTF-8 and duplicate JSON keys, malformed and missing TUF metadata, malformed pinned roots and key material, invalid signatures, expired/rolled-back cached metadata, untrusted mirror content, cache corruption, and oversized signed targets. There is no compressed repository format, so decompression-bomb handling is not applicable.
+
+Focused verification observed for Stage 17:
+
+- `CARGO_BUILD_JOBS=1 cargo test -p equalturn-registry --all-targets --all-features --offline` — 34 passed across 6 unit tests, 6 adversarial parser tests, 6 registry tests, and 16 TUF attack tests.
+- `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry --all-targets --all-features --offline -- -D warnings` — passed.
+- `cargo fmt --all -- --check` and `git diff --check` — passed.
+
 ## Completion evidence
 
 No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.
