@@ -6,6 +6,7 @@ members = [
   "crates/client-core",
   "crates/relay-core",
   "crates/report",
+  "crates/registry",
   "apps/equalturn",
   "apps/equalturn-relay",
 ]
@@ -34,6 +35,10 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt", "json"] }
 url = "2.5.8"
 uuid = { version = "1.28.0", features = ["serde", "v4"] }
+jsonschema = { version = "=0.59.0", default-features = false }
+jiff = "=0.2.38"
+sigstore-tuf = { version = "=0.15.0", default-features = false, features = ["aws-lc-rs"] }
+tempfile = "3.27.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
