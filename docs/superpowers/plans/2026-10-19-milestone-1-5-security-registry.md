@@ -125,7 +125,7 @@ Stage 19 review observed:
 
 ### Stage 20 — whole-branch review and final verification
 
-Reviewed the complete branch delta from the reviewed Milestone 1 baseline, including storage, protocol, relay, reports, registry parsing and validation, TUF verification, CLI, CI, and documentation. The final review found two Markdown hard-break spaces that failed `git diff --check`; they were removed in `9c691dc`. Searches found no `TODO`, `FIXME`, or `HACK` markers. The unsafe Rust is confined to the narrow Windows DPAPI wrapper. `expect` calls found in the reviewed source are test setup/assertion paths; no user-controlled request path relies on a panic. The tracked `.env.example` contains only replacement placeholders, and no private keys, database files, credentials, or machine-local paths are committed. No host enforcement was run.
+Reviewed the complete branch delta from the reviewed Milestone 1 baseline, including storage, protocol, relay, reports, registry parsing and validation, TUF verification, CLI, CI, and documentation. The final review found two Markdown hard-break spaces that failed `git diff --check`; they were removed in `9c691dc`. A search found no unfinished-work or workaround markers in source. The unsafe Rust is confined to the narrow Windows DPAPI wrapper. `expect` calls found in the reviewed source are test setup/assertion paths; no user-controlled request path relies on a panic. The tracked `.env.example` contains only replacement placeholders, and no private keys, database files, credentials, or machine-local paths are committed. No host enforcement was run.
 
 Observed local verification on the reviewed branch:
 
