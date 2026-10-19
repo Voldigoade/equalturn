@@ -123,10 +123,10 @@
 - Consumes: Task 5 updater and verified registry model.
 - Produces: explicit update state with pinned-root digest, verified metadata, installed target bytes/digest, registry version, and last successful refresh.
 
-- [ ] Add RED tests for cache rollback, corrupt metadata, missing/corrupt target, truncated/oversized files, symlink cache root/path, and failed interrupted replacement.
-- [ ] Preserve the existing valid installed target if a refresh fails and its signed metadata remains currently valid.
-- [ ] Use same-directory temporary files, fsync and atomic replacement; ensure TUF metadata-store best-effort writes cannot falsely report success.
-- [ ] Verify restart behavior, cache tampering, and stable status mapping; commit/push the cache checkpoint.
+- [x] Add RED tests for installed rollback/target tampering, missing/corrupt pointer, symlink store/pointer/metadata paths, and failed candidate replacement.
+- [x] Preserve the existing valid installed target if a refresh fails and its signed metadata remains currently valid.
+- [x] Use temporary same-filesystem snapshots, fsync and atomic pointer replacement; re-open the installed candidate through TUF so metadata-store best-effort writes cannot falsely report success.
+- [x] Verify restart behavior, consistent-snapshot names, authorized root rotation replay, cache-floor behavior, and tampering; focused tests and Clippy pass. (checkpoint commit and push pending)
 
 ### Task 7: Explicit staging/production trust profiles
 

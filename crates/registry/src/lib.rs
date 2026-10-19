@@ -1,9 +1,13 @@
 mod http_repository;
+mod installed;
 mod json;
 mod model;
 mod repository;
 mod trust;
 
+pub use installed::{
+    load_installed_registry, update_directory_repository, update_https_repository,
+};
 pub use model::{
     Actionability, BindScope, Category, Confidence, Ecosystem, Entry, EntryStatus,
     FalsePositiveRisk, Indicator, IndicatorKind, IndicatorLifecycle, Platform, Provider, Registry,
