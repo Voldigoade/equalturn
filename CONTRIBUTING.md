@@ -1,6 +1,6 @@
 # Contributing
 
-Equalturn is currently a research and architecture repository. The first useful contributions are sourced corrections, documented failure cases, schema review, and small feasibility probes that do not become product enforcement code without a scoped implementation milestone.
+Equalturn has a working non-enforcing Milestone 1 Rust CLI and relay. Contributions should preserve the documented trust boundary and privacy model; endpoint enforcement remains out of scope until a separate milestone is reviewed.
 
 ## Research contributions
 
@@ -19,4 +19,4 @@ Equalturn is currently a research and architecture repository. The first useful 
 
 ## Changes
 
-Use focused commits with clear messages. Avoid generated binaries, secrets, private machine data, and unrelated formatting changes. The repository is documentation-only in this phase; implementation work should follow the roadmap and be separately scoped.
+Use focused commits with clear messages. Avoid generated binaries, secrets, private machine data, and unrelated formatting changes. Run `cargo fmt --all -- --check`, `python3 tools/validate_registry.py`, `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings`, and `cargo test --workspace --locked` before submitting Rust changes. PostgreSQL integration tests use `TEST_DATABASE_URL` when configured. Keep future enforcement work separately scoped to the roadmap.

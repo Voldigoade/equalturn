@@ -1,57 +1,50 @@
 # Stack decision
 
-**Recommendation:** Rust for the shared client/event core, per-OS user-mode enforcement adapters, and initially the relay service; Tauri v2 with a TypeScript interface for the later unprivileged tray UI. Keep the UI process separate from the elevated Windows service or Linux system daemon. This is an architecture recommendation, not a prototype result.
+**Decision:** use Rust as the primary language for the shared protocol, CLI client, report verifier, and relay. This is now the implemented Milestone 1 architecture. Windows/Linux enforcement adapters, a privileged service, and a GUI remain outside this milestone and are not yet validated.
 
-## Why Rust
+## Why Rust wins for this project
 
-The endpoint service handles local IPC, event signing, registry parsing, process signals, and firewall configuration. Rust's checked ownership and thread-safety traits reduce common memory-lifetime and data-race errors in that privileged code. It can call both OS APIs through reviewed FFI boundaries. The framework already provides Windows service bindings and current Tauri tray support; the UI can remain low privilege.
+The shared protocol, local queue, relay, and report verifier need consistent validation, deterministic byte encoding, async networking, and a small portable distribution. A single Rust workspace keeps these boundaries reviewable and avoids separate client/relay protocol implementations. Rust's ownership and thread-safety checks reduce some memory-lifetime and data-race errors; they do not remove unsafe FFI, protocol, configuration, dependency, or endpoint trust risks. The workspace forbids `unsafe` Rust.
 
-Rust does not remove unsafe FFI risks, policy mistakes, administrator bypass, or API-version churn. Microsoft `windows-rs` documentation recommends focused bindings where possible, and notes that generated broad bindings create dependency weight and version churn. Pin the selected Windows bindings and isolate them behind a small adapter. The WFP user-mode management API should be tried before considering a kernel callout driver.
+Rust also has credible Windows and Linux system API access for a future OS-specific service, but no such bindings are used yet. WFP/nftables implementation and actual service/package behavior require their own platform research and VM validation. UI technology is deliberately unselected; any later tray process must remain unprivileged and separate from an elevated service.
+
+## Implemented workspace and dependencies
+
+The workspace targets Rust 2024, declares Rust 1.94 as its minimum version, and tracks the stable toolchain with `rustfmt` and `clippy` in `rust-toolchain.toml`. Applications are built with the committed `Cargo.lock`. Dependency versions below reflect the current manifests/lockfile and should be rechecked during upgrades.
+
+| Concern | Implemented choice | Boundary |
+| --- | --- | --- |
+| CLI | `clap` derive, `tokio` async entry point | Commands cover session lifecycle, status/participants, watch/sync, synthetic events, report export and verification. No GUI or auto-update. |
+| HTTP relay | Axum 0.8 + Tokio | Bounded JSON lifecycle/status/report endpoints and WebSocket upgrade. TLS uses `axum-server` with rustls. Plain HTTP is refused except explicit loopback development mode. |
+| HTTP client / WebSocket | `reqwest` with rustls; `tokio-tungstenite` | HTTPS validation, redirects disabled, request timeouts, bounded response/frame sizes, signed challenge reconnect. |
+| Durable relay storage | SQLx 0.9 + PostgreSQL; SQL migrations | Transactions serialize participant event-chain advancement and evidence ordering. Relay state is not required to compile the workspace. |
+| Local queue | SQLx + bundled SQLite | WAL and full synchronous durability for signed events/outbox/receipts. Session keys are separate files, not rows in the event database. |
+| Protocol serialization | Serde JSON for wire/report envelopes; hand-defined fixed binary bytes for signatures | Does not sign arbitrary `serde_json::to_vec` output. Protocol byte definitions and version compatibility are in [protocol-v1.md](protocol-v1.md). |
+| Cryptography | `ed25519-dalek` 3.x, `getrandom`, `sha2`, `zeroize`, UUIDv4 | Ed25519 key per participant/session, domain separation, SHA-256 chain hashes/fingerprints, OS randomness. No custom cryptography. Standard algorithm reference: [RFC 8032](research/sources.md#stack-and-protocol). |
+| Reports | Shared Rust report model and offline verifier | Checks included events, key bindings, chains, relay receipts/notices, manifest, and gaps; JSON and Markdown output. |
+| Logging | `tracing` and `tracing-subscriber` | Structured relay JSON logging; secrets and source addresses are excluded from application evidence. Operators must still review infrastructure/proxy logs. |
 
 ## Candidate comparison
 
 | Candidate | Strengths here | Costs / concerns | Decision |
 | --- | --- | --- | --- |
-| **Rust** | Memory-safe defaults; no managed runtime; strong async/networking; credible Windows and Linux bindings; cross-build targets; Tauri tray option. | FFI remains unsafe; Windows binding metadata has churn; contributors need Rust; Tauri adds a webview and frontend dependency surface. | **Selected.** Best balance for a privileged endpoint component plus shared protocol. |
-| **C++** | Most direct WFP and `libnftnl` access; strong Qt tray tooling; familiar native service ecosystem. | Memory safety is primarily discipline/tooling; CMake, ABI, and runtime packaging add work; UI framework is comparatively large. | **Runner-up.** Select if Windows binding probes show Rust cannot maintain the required API cleanly. |
-| **Go** | Simple service/server concurrency, broad contributor pool, easy pure-Go cross-builds, official Windows service and syscall packages. | GC/runtime included; cgo complicates cross-compilation; no maintained WFP-specific wrapper found, leaving hand-maintained ABI glue in a critical subsystem. | Good alternative for a relay or command-driven monitor, but not the best shared privileged core. |
-| **Zig** | Explicit allocation, direct C interop, strong cross-target build design, small-runtime potential. | Uneven platform/library support, rapidly evolving toolchain, smaller systems/UI ecosystem and contributor pool. | Too much ecosystem/toolchain risk for initial v1. |
+| **Rust** | Memory-safe defaults; no managed runtime; strong async/network ecosystem; one shared protocol/client/relay implementation; credible system API access. | Unsafe FFI remains possible; Windows bindings and native service semantics need later validation; contributor learning curve. | **Selected and used.** Best balance for a shared session protocol plus future small OS-specific services. |
+| **C++** | Direct WFP and `libnftnl` access; mature native service and Qt tray ecosystem. | Memory safety relies more on discipline/tooling; more ABI/build/packaging complexity; no advantage for shared wire semantics that offsets this here. | **Runner-up.** Revisit if Rust's native API boundaries prove unmaintainable in platform probes. |
+| **Go** | Straightforward relay concurrency, broad contributors, easy cross-builds. | Would add a second implementation language or leave endpoint bindings outside the shared core; cgo/native system bindings complicate cross-compilation. | Credible relay-only alternative, but adds little to the selected all-Rust M1. |
+| **Zig** | Explicit allocation and direct C interop. | Smaller systems/network ecosystem, contributor pool, and more toolchain/platform churn. | Too much ecosystem risk for the initial implementation. |
 
-| Other options | Role considered | Reason not selected as the primary stack |
-| --- | --- | --- |
-| --- | --- | --- |
-| C# / .NET | Could make a Windows-only service and UI straightforward. | Does not provide the same shared Linux service core; a separate Linux implementation would be needed. |
-| Java/Kotlin | Mature concurrency and UI libraries. | Runtime and packaging footprint, plus less direct OS firewall integration; does not reduce native per-OS work. |
-| TypeScript/Tauri | Useful for a cross-platform settings/tray UI. | Must not own privileged policy or become the enforcement boundary; frontend code is a larger attack surface than a small native UI. |
-| Swift | Good macOS integration. | macOS is not a first-class platform for this phase. |
+C, C#, Java/Kotlin, TypeScript/Tauri, and Swift were considered for narrower roles. C# could be attractive for Windows-only services but would still leave Linux native work separate. TypeScript/Tauri may fit a later unprivileged UI, but frontend code must not become the privileged boundary. Swift is not relevant to the Windows/Linux first-class targets. No frontend framework or tray UI has been selected.
 
-## Proposed process boundaries
+## Future OS-specific boundary
 
-- **Unprivileged UI:** Tauri tray/settings/report viewer. It never runs elevated.
-- **Local service:** Rust service with a small typed IPC surface. Windows uses Service Control Manager plus WFP user-mode management; Linux uses a systemd unit plus a dedicated nftables table. The service exposes no generic shell or arbitrary firewall commands.
-- **Shared core:** registry parser, event schema, signing, local queue, report generator, and session protocol.
-- **Relay:** one Rust service using HTTPS for session setup and WebSocket for live events, initially backed by PostgreSQL. No speculative microservices, cache, or blockchain.
-- **Platform UI:** Windows and Linux tray behaviors are tested separately; Tauri does not make OS service semantics or UI behavior identical.
+**Proposed design, not implemented:** a small OS-specific service owns only explicitly named competition policy operations; a separate unprivileged UI communicates through typed IPC. Windows research points to user-mode WFP management first; Linux research points to a dedicated nftables table with narrow privilege and systemd lifecycle. Do not expose arbitrary shell/firewall commands. Do not add a kernel driver or eBPF without evidence of a requirement. Authoritative OS references and known limitations are in [research sources](research/sources.md#operating-system-and-network-controls) and the [enforcement matrix](enforcement-matrix.md).
 
-## Dependencies / primitives to evaluate in the next phase
+## What remains to validate
 
-- Rust stable toolchain and Cargo lockfile; `windows-rs`/focused Windows crates and `windows-service` for Windows.
-- Tauri v2 tray-icon capability for the UI after the protocol prototype.
-- `tokio` plus a small HTTP/WebSocket stack for the relay and network client; use standard TLS validation.
-- SQLite for the local signed-event queue; PostgreSQL for relay session/event retention.
-- Ed25519 (RFC 8032) for participant signatures; RFC 8785 JSON Canonicalization Scheme or a deterministic binary encoding before signing.
-- `nft`/nftables interface on Linux and WFP user-mode APIs on Windows. Avoid custom kernel drivers and eBPF initially.
-- TUF metadata for a later independently updated registry, rather than inventing a custom auto-update trust scheme.
+- Supported Windows/Linux versions, system API crates, service/daemon packaging, and install/uninstall recovery.
+- Whether Rust bindings provide a maintainable narrow WFP boundary; whether Linux nftables integration is safely transactional under expected permissions.
+- Windows workspace tests pass in CI, while Linux/PostgreSQL integration tests pass on Linux. OS-specific enforcement, service packaging, install/uninstall recovery, and signing remain unvalidated.
+- Dependency update/security review, relay deployment model, and key/backup operations before public hosting.
+- A later unprivileged UI choice after protocol and local-service boundaries are stable.
 
-These are candidates to pin and validate before source-level commitment. No benchmark or binary-size claim was made.
-
-## Feasibility probes before enforcement implementation
-
-1. Windows VM: open a WFP management session, add/remove one narrowly scoped test filter, and start/stop the service under an administrator account.
-2. Linux VM: create/remove an Equalturn-owned nftables table/set atomically; confirm recovery after service crash and reboot.
-3. Exercise local IPC permissions and ensure UI requests cannot become arbitrary privileged commands.
-4. Build on Windows and at least Ubuntu and Fedora in CI; test with IPv4, IPv6, DNS, browser DoH, WSL, and a container network.
-
-## Sources
-
-Language and primitive references are listed in [research sources](research/sources.md). Context7 was used on 19 October 2026 to query current Tauri v2 tray guidance and Microsoft's `windows-rs` binding guidance; those queries confirmed the tray feature and the need to keep generated/unsafe OS bindings narrow. They do not establish successful product integration.
+Research and current-library documentation sources are indexed in [research/sources.md](research/sources.md). Context7 was used during Phase 0 for Tauri v2 tray and `windows-rs` guidance; those queries informed only later design candidates and did not validate integration.

@@ -1,66 +1,61 @@
 # Privacy and reporting model
 
-**Status:** proposed defaults requiring review before implementation.
+**Status:** Milestone 1's data model and collection boundaries are implemented in the client, relay, and report verifier. The telemetry modes below are future design options; none is selectable or implemented. The implementation collects no workstation activity telemetry. Verification results and deferred work are recorded in [implementation-roadmap.md](implementation-roadmap.md).
 
-## Data minimization principle
+## Milestone 1 collection
 
-Collect only the facts needed to show session membership, protection state, selected enforcement observations, connectivity gaps, and report integrity. A competition agreement should clearly state which policy mode is active and what that mode can observe. Privacy modes must describe actual differences in data collection, not imply stronger guarantees than the OS provides.
+The client currently collects or creates only the data needed to join and verify a session:
 
-## Proposed modes
+- Session UUIDv4, participant UUIDv4, ASCII nickname, and a fresh Ed25519 public/private identity for that participant/session.
+- Signed session events, their per-participant sequence/hash chain, local client timestamp, and payload. Join payloads include client version and coarse OS family/bucket, reported by the participant client. The only AI-related payload supported by the CLI is explicitly synthetic and includes a user-supplied lowercase hostname.
+- Relay receipts, liveness notices, session lifecycle state, and a signed final manifest.
+- Local SQLite profile/outbox/evidence state and a separate key file so unacknowledged events can be retried. Signing secrets are not stored in SQLite or sent to the relay.
 
-| Mode | Collection | Appropriate use |
-| --- | --- | --- |
-| **Observe-only** | Client/service version, platform family/version bucket, protection state, service/relay liveness, policy errors, selected process indicators, and optionally known destination categories. No destination detail is shared unless the session opts in. | Initial feasibility and compatibility sessions. Does not claim to block AI access. |
-| **Standard** | Observe-only data plus known blocked-domain/IP rule hits, known blocked application launch indicators, and policy changes. Send only matched provider/product category and rule ID by default; avoid raw URL, path, process command line, and arbitrary destination strings. | Proposed default for a voluntary session after the block policy is reviewed. |
-| **Destination detail opt-in** | Standard data plus the exact matched hostname or remote IP for selected network events, disclosed to all participants before the session starts. Never include path, query string, request body, or content. | Sessions where participants explicitly agree that more specific destination evidence is useful. |
+The report JSON contains protocol and report-schema versions, session ID, participant IDs/nicknames/public keys/fingerprints, participant-reported client and coarse OS metadata, participant events, relay receipts/notices, relay identity, final manifest when available, and local-only unreceipted events. Verification status is computed from the included evidence. Participant timestamps are untrusted; relay receive times/order are relay claims.
 
-An eventual organizer-selected mode must be visible to every participant before joining and remain fixed during an active session, except that the report records an explicit transition. A less invasive mode can be selected at any time; changing to a more detailed mode requires renewed participant consent.
+This milestone does not observe protection state, application/process launches, network requests, browser/IDE activity, or workstation integrity. It does not consume the AI registry. There is no tray UI, enforcement service, privacy-mode selector, or hidden telemetry collector.
 
-## Collect
+## Deliberately not collected
 
-- Session-scoped random ID, participant public-key ID, and user-chosen nickname.
-- Session start/end, join/leave, client version, broad OS/version bucket, and protection-state transitions.
-- Signed heartbeat sequence and relay receipt time; connectivity stale/reconnect intervals.
-- Policy version and explicitly selected enforcement mode.
-- Rule ID and coarse provider/product category for blocked events; exact hostname/IP only in destination-detail mode.
-- Known application identifier or registry indicator ID when a block rule matches; use a stable package/product ID where available rather than user-specific filesystem path.
-- Protection failures, policy install/remove results, integrity check result categories, and termination reason.
-- Versioned, signed event envelope and server receipt metadata needed to verify ordering and report gaps.
+The client, relay evidence model, and report format do not collect or include:
 
-## Deliberately do not collect
-
-- Keystrokes, clipboard, screenshots, microphone, webcam, or screen recordings.
-- Prompt text, chat contents, API request/response bodies, source code, files, or full filesystem inventory.
+- Keystrokes, clipboard contents, prompts, chat messages, source code, screenshots, screen recordings, microphone/webcam data, or request/response bodies.
 - Passwords, access tokens, cookies, environment variables, or command-line arguments.
-- Complete browser history, arbitrary page titles, full URLs, query strings, or unrelated DNS/network logs.
-- User account name, real name, email address, machine hostname, MAC address, or peer-visible IP address.
-- All running processes or installed software as a general inventory. Observe only selected known indicators required by the chosen policy.
+- Browsing history, page titles, full URLs, query strings, DNS history, or unrelated network logs.
+- Real name, email, machine username, hostname, MAC address, hardware serial, filesystem inventory, or process/software inventory.
+- Peer network addresses in participant-visible session objects or reports.
 
-Some OS/network APIs expose more information than this design needs. The implementation must discard it at collection time, not rely on downstream redaction. Any exception should be narrowly justified, documented, and separately consented.
+The synthetic event hostname is an explicit CLI argument, not a passively observed destination. No participant is labeled as having cheated based on an event or liveness state.
 
 ## Who sees what
 
-- The local participant sees their own detailed event timeline and report.
-- Other participants see the nickname, session-scoped public-key ID, protection state, signed rule-hit category, state/liveness transitions, and events the selected mode allows.
-- Exact hostname/IP is visible to peers only in Destination detail opt-in mode.
-- The relay sees source IP and connection metadata because it terminates the connection. It should not expose those values to peers or include them in peer reports. Relay operators must document access, retention, and legal disclosure handling.
-- The client keeps the private session key local and removes it at session expiry/explicit deletion. Key loss should be visible as an identity discontinuity.
+- A participant sees the shared pseudonymous participant roster, signed shared events, liveness state, receipts, and relay report. Local data also includes that participant's own pending signed events and their private key file.
+- Other participants receive public keys, key fingerprints, nicknames, session-scoped participant IDs, signed events and relay evidence. They do not receive another participant's source IP from the API or report.
+- The relay operator necessarily sees source IP addresses and connection timing at the transport layer. The application evidence schema does not persist or fan out these values. Deployment reverse proxies, firewalls, cloud providers, and operational logging may record transport metadata independently; the operator must document and control those systems.
+- The relay signing private key stays in the relay's persistent identity file. It is not returned to participants; only its public key/fingerprint are sent. Session participant keys are stored locally in separate key files and are not global machine identities.
 
-## Retention proposal
+The CLI reports the relay key fingerprint during create/join and saves the relay public key with the local profile. This supports checking future relay responses against the same key for that locally stored profile. A self-contained exported report proves only that its receipts/manifests verify under the included relay key; to identify the expected relay, participants must compare or pin its fingerprint through a trusted out-of-band channel.
 
-Keep the relay’s active-session state only while active and a short reconnect grace period. Proposed deletion: seven days after normal end or last heartbeat for an abandoned session, with a separately documented maximum backup-expiry window. This is a product policy proposal, not an implemented retention guarantee. Until that policy is implemented and auditable, the relay should store no production session data. Participants can export a local report before expiry; local export retention is controlled by that participant.
+## Retention and deletion
 
-## End-of-session report
+**Implemented relay policy:** the relay periodically removes unstarted sessions 24 hours after creation, ended sessions seven days after their end timestamp, and active sessions after seven days without activity/heartbeat. The cleanup task runs hourly. Deletion cascades through session participants, event evidence, receipts, notices, and manifest in the primary PostgreSQL database.
 
-Produce a portable JSON evidence bundle and readable HTML/PDF view from the same canonical data. Include:
+This code cannot govern backups, database snapshots, hosting-provider logs, or reverse-proxy logs. Backup expiry and an operational deletion/incident policy remain operator responsibilities before public hosting. The participant's SQLite event store, key files, and exported reports remain local until the participant removes them. Losing the local database/key can create a visible identity or evidence discontinuity; the client refuses to silently recreate an existing identity. Platform-specific hardening/ACL assurance must be verified on supported Windows builds.
 
-- nickname and session ID; participant key fingerprint; client and registry versions;
-- server-ordered session start/end, elapsed time from relay receipts, participant join/leave times, and explicit clock uncertainty;
-- protection state timeline, enforcement mode, and platform coverage summary;
-- blocked rule hits by provider/product category, with exact destination only if consented;
-- policy failures, client/service liveness gaps, reconnects, queued/offline events, and termination reason;
-- per-participant sequence/hash chain status, server receipt range, missing sequence ranges, and signed relay checkpoint/receipt verification status;
-- explicit statement that signed events authenticate a key’s claim, not the truth or completeness of local observation;
-- no automatic “cheated” label. The report presents observations, gaps, and limitations for participants to interpret.
+## Future telemetry modes
 
-Do not include a browsing-history appendix. Page-level tool history is not necessary to show the proposed controls and would create substantial privacy risk; it is out of scope unless a future, separately reviewed, explicit telemetry mode can establish necessity and consent.
+These are proposals only. Milestone 1 has no mechanism to select them or collect their data.
+
+| Proposed mode | Potential collection | Required design review |
+| --- | --- | --- |
+| Observe-only | Version/platform, protection state, selected integrity checks, and liveness | Define exactly what each OS primitive reveals and how failures become visible. |
+| Standard | Observe-only plus selected known blocked-rule/application matches | Prefer rule IDs and coarse categories; test false positives and consent before enabling. |
+| Destination detail opt-in | Standard plus matched hostname or remote IP for selected events | Require explicit session-wide consent; exclude URL paths, queries, request bodies, and content. |
+
+Any future mode must discard unnecessary data at collection time and describe real differences to participants before joining. A change to a more detailed mode requires renewed consent and a visible report transition. No mode can make device-owner telemetry trustworthy against a participant with administrator/root control.
+
+## End-of-session report semantics
+
+The current JSON bundle is canonical for evidence; a Markdown summary is rendered from the same bundle. The verifier returns `VALID`, `VALID_WITH_GAPS`, or `INVALID`. It checks participant signatures and chains, relay signatures, matching event receipts, evidence ordering, participant heads, and the final manifest. A report without a relay key pinned out of band is labeled as unanchored relay identity.
+
+`VALID` means the included evidence is internally consistent and signatures verify under the included keys. `VALID_WITH_GAPS` means the signed evidence is internally valid but there are missing sequences/orders, local-only events, absent manifest/evidence, or other incompleteness findings. `INVALID` indicates malformed or conflicting evidence or a failed signature/integrity check. None of these statuses establishes that no AI was used, that the client observed the whole workstation, or that all relay evidence was disclosed. Reports use terms such as synthetic event, participant-reported metadata, liveness gap, and unreceipted local event; they do not infer intent or assign a cheating verdict.
