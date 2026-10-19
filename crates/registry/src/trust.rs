@@ -1,5 +1,5 @@
 use crate::{
-    REGISTRY_TARGET_PATH, ROOT_MAX_BYTES, RegistryError, model::Registry,
+    REGISTRY_TARGET_PATH, ROOT_MAX_BYTES, RegistryError, TufFailureKind, model::Registry,
     repository::DirectoryRepository,
 };
 use jiff::Timestamp;
@@ -75,14 +75,14 @@ pub async fn verify_repository(
     config.max_root_rotations = 32;
     config.max_delegations = 8;
     let mut updater = Updater::new(repository, bootstrap_root)
-        .map_err(|_| RegistryError::Tuf)?
+        .map_err(|_| RegistryError::Tuf(TufFailureKind::InvalidRoot))?
         .with_config(config)
         .with_store(Arc::clone(&store));
-    updater.refresh(now).await.map_err(|_| RegistryError::Tuf)?;
+    updater.refresh(now).await.map_err(classify_tuf_error)?;
     let target = updater
         .get_target(REGISTRY_TARGET_PATH, now)
         .await
-        .map_err(|_| RegistryError::Tuf)?;
+        .map_err(classify_target_error)?;
     verify_persisted_floor(store.as_ref(), &updater, &target)?;
     let registry = Registry::parse(&target)?;
     let target_sha256: [u8; 32] = Sha256::digest(&target).into();
@@ -92,6 +92,28 @@ pub async fn verify_repository(
         target_sha256,
         trusted_root_version,
     })
+}
+
+fn classify_tuf_error(error: TufError) -> RegistryError {
+    let kind = match error {
+        TufError::Expired { .. } => TufFailureKind::Expired,
+        TufError::Rollback { .. } => TufFailureKind::Rollback,
+        TufError::BadRootVersion { .. } => TufFailureKind::InvalidRoot,
+        TufError::ThresholdNotMet { role, .. } if role == "root" => TufFailureKind::InvalidRoot,
+        TufError::ThresholdNotMet { .. } | TufError::Crypto(_) => TufFailureKind::InvalidSignature,
+        _ => TufFailureKind::InvalidMetadata,
+    };
+    RegistryError::Tuf(kind)
+}
+
+fn classify_target_error(error: TufError) -> RegistryError {
+    let classified = classify_tuf_error(error);
+    match classified {
+        RegistryError::Tuf(
+            TufFailureKind::Expired | TufFailureKind::Rollback | TufFailureKind::InvalidSignature,
+        ) => classified,
+        _ => RegistryError::Tuf(TufFailureKind::InvalidTarget),
+    }
 }
 
 struct PersistentMetadataStore {

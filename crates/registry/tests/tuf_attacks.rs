@@ -1,4 +1,4 @@
-use equalturn_registry::{RegistryError, verify_repository};
+use equalturn_registry::{RegistryError, RegistryVerificationStatus, verify_repository};
 use jiff::Timestamp;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
@@ -232,7 +232,10 @@ async fn rejects_target_bytes_that_do_not_match_signed_target_metadata() {
     .await
     .require_error("target hash mismatch must fail");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidTarget
+    );
 }
 
 #[tokio::test]
@@ -262,7 +265,10 @@ async fn rejects_signed_rollback_after_a_newer_version_was_cached() {
     .await
     .require_error("older signed version must not pass the persisted floor");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::Rollback
+    );
 }
 
 #[tokio::test]
@@ -284,7 +290,10 @@ async fn rejects_expired_metadata_without_waiting_for_wall_clock_time() {
     .await
     .require_error("expired timestamp must fail at the injected time");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::Expired
+    );
 }
 
 #[tokio::test]
@@ -337,7 +346,10 @@ async fn rejects_an_unauthorized_remote_root_rotation() {
     .await
     .require_error("untrusted root is not authorized by the bootstrap root");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidRoot
+    );
 }
 
 #[tokio::test]
@@ -363,7 +375,10 @@ async fn rejects_mix_and_match_snapshot_metadata() {
     .await
     .require_error("timestamp pin must reject a snapshot from another repository state");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidMetadata
+    );
 }
 
 #[tokio::test]
@@ -388,7 +403,10 @@ async fn rejects_malformed_metadata_safely() {
     .await
     .require_error("malformed signed metadata must fail closed");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidMetadata
+    );
 }
 
 #[tokio::test]
@@ -409,7 +427,10 @@ async fn attacker_cannot_replace_remote_root_and_all_metadata_after_bootstrap() 
     .await
     .require_error("attacker metadata cannot replace the independently pinned bootstrap root");
 
-    assert!(matches!(error, RegistryError::Tuf));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidSignature
+    );
 }
 
 #[tokio::test]
@@ -430,7 +451,11 @@ async fn rejects_a_validly_signed_but_semantically_invalid_registry_target() {
     .await
     .require_error("TUF authenticity does not bypass registry semantic validation");
 
-    assert!(matches!(error, RegistryError::Schema(_)));
+    assert!(matches!(&error, RegistryError::Schema(_)));
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidRegistry
+    );
 }
 
 #[tokio::test]

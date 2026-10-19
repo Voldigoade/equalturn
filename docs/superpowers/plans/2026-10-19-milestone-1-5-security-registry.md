@@ -74,6 +74,19 @@ Focused verification observed before the Stage 15 checkpoint:
 
 The bootstrap substitution test keeps the independently pinned bootstrap root and presents a repository fully signed by an attacker key; it is rejected by the actual TUF verifier. A separate earlier registry test covers a root whose supplied bytes fail the independent bootstrap digest pin.
 
+### Stage 16 — offline registry CLI
+
+Added `equalturn registry verify`, `inspect`, and `search`. Each command reads a local TUF directory repository and requires a caller-supplied root file plus independent lowercase SHA-256 pin. Each re-verifies the repository before exposing registry entries; there is no relay requirement, HTTP transport, or default production root. The persistent metadata cache defaults below the client data directory and can be overridden with `--cache-dir`. Inspection includes product/provider identity, categories, surfaces, status, indicator values, platforms, provenance, confidence, actionability, false-positive risk, verification date, and limitations. Stable statuses distinguish valid data, expiry, rollback, signature, root, target, registry, metadata, and repository failures.
+
+Focused verification observed before the Stage 16 checkpoint:
+
+- `CARGO_BUILD_JOBS=1 cargo test -p equalturn -p equalturn-registry --offline` — 22 passed across both packages (2 application unit tests, 2 CLI end-to-end tests, 1 registry unit test, 6 registry tests, and 11 TUF attack tests).
+- `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry -p equalturn --all-targets --all-features --offline -- -D warnings` — passed.
+- `cargo fmt --all -- --check` — passed.
+- `CARGO_BUILD_JOBS=1 cargo run -p equalturn --offline -- registry --help` and `target/debug/equalturn registry verify --help` — command tree and required trust arguments observed.
+
+The CLI end-to-end test generates a process-local ephemeral TUF repository and verifies successful `verify`, `inspect`, and `search` output without relay configuration. A separate invocation supplies a mismatched root pin and observes `INVALID_ROOT` plus a failing exit status. Test keys and repositories remain in temporary directories.
+
 ## Completion evidence
 
 No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.

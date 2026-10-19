@@ -1,7 +1,7 @@
 # Trusted registry distribution: tooling decision
 
 **Decision date:** 19 October 2026  
-**Status:** architecture selected; repository publication and client integration are subsequent stages. No signed production registry is published by this change.
+**Status:** local Rust verification and offline CLI are implemented; repository publication, production root ceremony, and signed release remain uninitialized. No signed production registry is available.
 
 ## Decision
 
@@ -119,6 +119,14 @@ The SHA-256 pin is a trust input, not a self-authenticating convenience: an oper
 
 The persistent cache protects rollback floors from an ordinary mirror replay when the local cache remains intact. It does not protect against a local administrator, same-user code able to rewrite the cache, disk rollback, or a client whose clock is manipulated. Cache contents are public metadata, not secrets. Registry verification remains separate from enforcement.
 
+## Offline CLI
+
+`equalturn registry verify`, `inspect`, and `search` all accept a local TUF repository directory plus `--root PATH` and `--root-sha256 HEX`. They call the same verifier above on each invocation; inspection and search never parse an arbitrary registry file or skip TUF verification. The repository transport is directory-only and the `sigstore-tuf` HTTP feature is disabled. `--cache-dir PATH` selects persistent metadata state; otherwise the client uses `registry/trusted` below its configured data directory. The initial root bytes and lowercase 32-byte digest are required independently supplied trust inputs. No default root or remote root-discovery path exists.
+
+The CLI emits stable failure statuses and a non-zero exit code. Expired metadata maps to `EXPIRED`; lower metadata versions map to `ROLLBACK`; role threshold or cryptographic verification failures map to `INVALID_SIGNATURE` (or `INVALID_ROOT` for the root role); root parsing/bootstrap failures map to `INVALID_ROOT`; target retrieval/integrity failures map to `INVALID_TARGET`; schema/semantic failures map to `INVALID_REGISTRY`; other TUF metadata failures map to `INVALID_METADATA`; local repository or persistent-cache failures map to `INVALID_REPOSITORY`. Unknown future TUF error variants fail closed as `INVALID_METADATA` rather than exposing dependency diagnostics as a stable interface. Successful operations print `VALID`, the registry version, entry/indicator counts, trusted root version, and target hash. Entry displays include provider, product, categories, surfaces, lifecycle, indicator provenance, confidence, actionability, false-positive risk, and limitations.
+
+Until a release embeds a root and its independently authenticated fingerprint, the CLI is intended for local test repositories and operator-supplied local trust material. The separate publication repository remains unconfigured; there is no production root to distribute or use by default.
+
 ## Sources
 
 - [TUF specification](https://theupdateframework.io/spec/) — protocol roles, threshold signatures, initial trust, rotation, rollback, and expiration; checked 19 October 2026.
@@ -126,7 +134,7 @@ The persistent cache protects rollback floors from an ordinary mirror replay whe
 - [TUF-on-CI README](https://github.com/theupdateframework/tuf-on-ci) and [repository maintenance manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md) — signing workflow, publication setup, online signing choices, and GitHub permissions; checked 19 October 2026.
 - [TUF-on-CI changelog](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/CHANGELOG.md) — latest reviewed release notes; checked 19 October 2026.
 - [TUF-on-CI template](https://github.com/theupdateframework/tuf-on-ci-template) and its [publication workflow](https://github.com/theupdateframework/tuf-on-ci-template/blob/main/.github/workflows/publish.yml), [signing workflow](https://github.com/theupdateframework/tuf-on-ci-template/blob/main/.github/workflows/signing-event.yml), and [online-sign workflow](https://github.com/theupdateframework/tuf-on-ci-template/blob/main/.github/workflows/online-sign.yml) — checked 19 October 2026 for repository initialization and job-scoped permissions.
-- [`sigstore-tuf` crate documentation](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/) and [Sigstore Rust repository](https://github.com/sigstore/sigstore-rust) — Rust client state machine, transport/cache boundaries, and repository interoperability notes; checked 19 October 2026.
+- [`sigstore-tuf` 0.15.0 crate documentation](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/), [error taxonomy](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/error/enum.Error.html), and [Sigstore Rust repository](https://github.com/sigstore/sigstore-rust) — Rust client state machine, transport/cache boundaries, error categories, and repository interoperability notes; checked 19 October 2026.
 - [`jsonschema` 0.59.0 documentation](https://docs.rs/jsonschema/0.59.0/jsonschema/) — Draft 2020-12 validator and opt-in format validation; checked 19 October 2026.
 - [`tough` 0.24.0 documentation](https://docs.rs/tough/0.24.0/tough/) and [upstream repository](https://github.com/awslabs/tough) — TUF 1.0.0 support statement and known feature limits; checked 19 October 2026.
 - [`tuf` 0.2.0 crate record](https://docs.rs/crate/tuf/0.2.0) — release age and beta/API stability caveat; checked 19 October 2026.

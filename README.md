@@ -2,7 +2,7 @@
 
 Equalturn is a privacy-conscious integrity session system for people who mutually agree to compete without AI assistance. It gives participants pseudonymous session identities and a shared, signed record of events accepted by a relay.
 
-**Status: Milestone 1 implemented; local verification and Linux/Windows GitHub Actions passed on 19 October 2026.** The Rust workspace contains a CLI client, a PostgreSQL-backed relay, a versioned signed-event protocol, a durable local event queue, and an offline report verifier. This milestone is non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
+**Status: Milestone 1 is implemented; Milestone 1.5 security hardening and trusted-registry work is in progress.** The Rust workspace contains a CLI client, a PostgreSQL-backed relay, a versioned signed-event protocol, a durable local event queue, and offline report and registry verifiers. Registry commands verify local TUF repositories against an independently pinned root. No production Equalturn registry root or signed release has been created. The product remains non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
 
 Participant signatures prove which session key made a claim and whether the included event chain was changed. Relay signatures attest to event receipt/order and to the final manifest. Neither proves that a client observed reality honestly, that an event was not omitted before signing, or that the relay did not withhold evidence. A workstation administrator, second device, virtual machine, remote host, or compromised client remains outside the guarantees of this milestone.
 
@@ -38,6 +38,26 @@ Participant signatures prove which session key made a claim and whether the incl
 - Submit an explicitly synthetic `ai-access-attempt` event to exercise the same event path; this is not an observed or blocked access attempt.
 
 The protocol, limits, signatures, reconnect behavior, retention rules, and known limitations are specified in [protocol v1](docs/protocol-v1.md). The researched AI registry now includes structured product, package, extension, executable, and runtime indicators; it remains separate from enforcement and is not loaded by the client or relay.
+
+## Offline registry commands
+
+These commands accept a **local** TUF repository directory containing `metadata/` and `targets/`. Each command verifies the repository and the registry target before displaying entries. They do not contact a mirror, relay, or other network service. The root file and lowercase SHA-256 pin must come from an independently authenticated release channel; the repository itself cannot establish its own initial trust.
+
+```sh
+equalturn registry verify ./local-registry \
+  --root ./trusted-root.json \
+  --root-sha256 ROOT_SHA256
+
+equalturn registry inspect ./local-registry openai-chatgpt \
+  --root ./trusted-root.json \
+  --root-sha256 ROOT_SHA256
+
+equalturn registry search ./local-registry openai \
+  --root ./trusted-root.json \
+  --root-sha256 ROOT_SHA256
+```
+
+The verified metadata cache is persistent below the Equalturn data directory by default; set `--cache-dir` to select another location. Verification failures print a stable status such as `EXPIRED`, `ROLLBACK`, `INVALID_SIGNATURE`, `INVALID_ROOT`, `INVALID_TARGET`, or `INVALID_REGISTRY` and return a non-zero exit code. A valid TUF signature authenticates publication, not indicator truth or blocking safety. Until the root ceremony and a signed release exist, these commands are trust plumbing for local repositories and test fixtures, not a usable public registry feed.
 
 ## Local development
 

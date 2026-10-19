@@ -29,7 +29,77 @@ pub enum RegistryError {
     #[error("local TUF repository is invalid or unavailable")]
     Repository,
     #[error("TUF metadata or target verification failed")]
-    Tuf,
+    Tuf(TufFailureKind),
+}
+
+impl RegistryError {
+    pub fn verification_status(&self) -> RegistryVerificationStatus {
+        match self {
+            Self::TooLarge { .. }
+            | Self::InvalidUtf8
+            | Self::DuplicateJsonKey
+            | Self::MalformedJson
+            | Self::Schema(_)
+            | Self::Semantic(_) => RegistryVerificationStatus::InvalidRegistry,
+            Self::RootTooLarge { .. } | Self::BootstrapPinMismatch => {
+                RegistryVerificationStatus::InvalidRoot
+            }
+            Self::Repository => RegistryVerificationStatus::InvalidRepository,
+            Self::Tuf(kind) => (*kind).into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegistryVerificationStatus {
+    Valid,
+    Expired,
+    Rollback,
+    InvalidSignature,
+    InvalidRoot,
+    InvalidTarget,
+    InvalidRegistry,
+    InvalidMetadata,
+    InvalidRepository,
+}
+
+impl RegistryVerificationStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Valid => "VALID",
+            Self::Expired => "EXPIRED",
+            Self::Rollback => "ROLLBACK",
+            Self::InvalidSignature => "INVALID_SIGNATURE",
+            Self::InvalidRoot => "INVALID_ROOT",
+            Self::InvalidTarget => "INVALID_TARGET",
+            Self::InvalidRegistry => "INVALID_REGISTRY",
+            Self::InvalidMetadata => "INVALID_METADATA",
+            Self::InvalidRepository => "INVALID_REPOSITORY",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TufFailureKind {
+    Expired,
+    Rollback,
+    InvalidSignature,
+    InvalidRoot,
+    InvalidTarget,
+    InvalidMetadata,
+}
+
+impl From<TufFailureKind> for RegistryVerificationStatus {
+    fn from(value: TufFailureKind) -> Self {
+        match value {
+            TufFailureKind::Expired => Self::Expired,
+            TufFailureKind::Rollback => Self::Rollback,
+            TufFailureKind::InvalidSignature => Self::InvalidSignature,
+            TufFailureKind::InvalidRoot => Self::InvalidRoot,
+            TufFailureKind::InvalidTarget => Self::InvalidTarget,
+            TufFailureKind::InvalidMetadata => Self::InvalidMetadata,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
@@ -112,6 +182,14 @@ macro_rules! string_enum {
         #[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
         pub enum $name {
             $(#[serde(rename = $value)] $variant),+
+        }
+
+        impl $name {
+            pub const fn as_str(self) -> &'static str {
+                match self {
+                    $(Self::$variant => $value),+
+                }
+            }
         }
     };
 }

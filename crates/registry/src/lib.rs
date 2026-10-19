@@ -6,7 +6,8 @@ mod trust;
 pub use model::{
     Actionability, BindScope, Category, Confidence, Ecosystem, Entry, EntryStatus,
     FalsePositiveRisk, Indicator, IndicatorKind, IndicatorLifecycle, Platform, Provider, Registry,
-    RegistryError, RegistrySurface, Relationship, RelationshipKind, Source,
+    RegistryError, RegistrySurface, RegistryVerificationStatus, Relationship, RelationshipKind,
+    Source, TufFailureKind,
 };
 pub use trust::{VerifiedRegistry, verify_bootstrap_root, verify_repository};
 

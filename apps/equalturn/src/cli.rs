@@ -51,6 +51,60 @@ pub enum Command {
         #[command(subcommand)]
         command: ReportCommand,
     },
+    /// Inspect a locally stored registry only after TUF verification.
+    Registry {
+        #[command(subcommand)]
+        command: RegistryCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum RegistryCommand {
+    /// Verify a local TUF repository against an independently pinned root.
+    Verify(RegistrySourceArgs),
+    /// Inspect one entry from a verified local registry repository.
+    Inspect(RegistryInspectArgs),
+    /// Search a verified local registry repository.
+    Search(RegistrySearchArgs),
+}
+
+#[derive(Args, Clone)]
+pub struct RegistrySourceArgs {
+    /// Local directory containing metadata/ and targets/.
+    #[arg(value_name = "REPOSITORY")]
+    pub repository: PathBuf,
+
+    /// Out-of-band trusted root metadata file.
+    #[arg(long, value_name = "PATH")]
+    pub root: PathBuf,
+
+    /// Independently distributed SHA-256 pin for --root.
+    #[arg(long, value_name = "HEX")]
+    pub root_sha256: String,
+
+    /// Persistent metadata cache; defaults below the client data directory.
+    #[arg(long, value_name = "PATH")]
+    pub cache_dir: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct RegistryInspectArgs {
+    #[command(flatten)]
+    pub source: RegistrySourceArgs,
+
+    /// Exact registry entry identifier.
+    #[arg(value_name = "ENTRY_ID")]
+    pub entry_id: String,
+}
+
+#[derive(Args)]
+pub struct RegistrySearchArgs {
+    #[command(flatten)]
+    pub source: RegistrySourceArgs,
+
+    /// Case-insensitive provider, product, alias, or indicator query.
+    #[arg(value_name = "QUERY")]
+    pub query: String,
 }
 
 #[derive(Subcommand)]
