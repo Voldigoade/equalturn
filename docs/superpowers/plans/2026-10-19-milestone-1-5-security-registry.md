@@ -1,0 +1,64 @@
+# Milestone 1.5 implementation plan
+
+**Status:** executing on `work/milestone-1.5-registry-hardening` from reviewed Milestone 1 commit `226c531fd4724a9fc726868055f43d946df381ce`.
+
+## Baseline capture
+
+Observed before implementation on 19 October 2026:
+
+- `main` and `origin/main` pointed to `226c531fd4724a9fc726868055f43d946df381ce`; the working tree was clean.
+- Rust and Cargo were `1.99.1`; the repository pins the stable channel with `rustfmt` and Clippy.
+- Workspace packages: `equalturn-protocol`, `equalturn-client-core`, `equalturn-relay-core`, `equalturn-report`, `equalturn`, and `equalturn-relay`.
+- PostgreSQL migration: `crates/relay-core/migrations/0001_initial.sql`.
+- CI has Linux/PostgreSQL and Windows jobs. The baseline GitHub Actions run `39271353939` completed successfully on this commit.
+- Registry v2: 127 records, 130 source records, 59 structured indicators, and 18 categories; `python3 tools/validate_registry.py` passed.
+- `cargo fmt --all -- --check` and `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` passed.
+- `cargo test --workspace --locked` passed with a loopback-only PostgreSQL 17 container and `TEST_DATABASE_URL` configured: 49 tests, including both PostgreSQL relay integration tests. Running that command without sandbox network permission initially failed to connect to loopback; the same command passed with the explicitly authorized sandbox elevation. This was a sandbox restriction, not a repository failure.
+- `cargo audit --file Cargo.lock` passed after the RustSec advisory database was initialized through the authorized elevated path; it scanned 302 locked dependencies and loaded 1,338 advisories.
+- `gh auth status` reports the saved CLI token is invalid. The connected GitHub integration successfully read `Voldigoade/equalturn` and reports push/admin permissions; it will be used for branch commits and ref updates, without accessing browser credentials.
+
+The native worktree tool placed its checkout outside the sandbox's writable roots. To keep edits within the authorized workspace, this task uses the named work branch in the existing checkout; `main` remains at the reviewed baseline until final integration.
+
+## Review findings and invariants
+
+The protocol and evidence model remain authoritative: participant signatures authenticate claims, not endpoint truth; relay signatures authenticate relay statements, not relay honesty or non-equivocation. Session privacy, bounded relay interfaces, and the non-enforcing milestone boundary remain unchanged.
+
+The independent review found concrete hardening work allocated to later focused stages: Windows participant seeds are currently stored unprotected; Unix key-path checks have check/open race exposure and do not verify directory ownership; relay-key persistence does not validate parent-directory ownership/permissions or sync the parent; the registry validator checks hand-written constraints but does not actually apply its declared JSON Schema. These findings will be fixed and tested in their owning stages rather than folded into a broad refactor. No endpoint enforcement test will run on the development host.
+
+## File and component map
+
+- `crates/client-core/src/persistence.rs` and a small platform key-protection module: versioned participant-key envelope, DPAPI on Windows, strict owner-only Unix storage, and safe legacy upgrade behavior.
+- `crates/relay-core/src/identity.rs`: relay signing-key path and atomic persistence hardening.
+- `crates/registry/` (workspace crate): typed v3 model, bounds, semantic validation, deterministic release serialization, and read-only lookup/inspection APIs.
+- `registry/registry-v3.json`, `registry/schema-v3.schema.json`, and `tools/validate_registry.py`: reviewed research snapshot, Draft 2020-12 validation, provenance checks, and deterministic diagnostics.
+- `crates/registry` update module plus `apps/equalturn/src/commands/registry.rs`: mature TUF client integration and offline `verify`, `inspect`, and `search`; this code will not be connected to enforcement or silently fetch updates.
+- `.github/workflows/ci.yml`, registry fixtures/tests, `docs/registry-trust.md`, `docs/enforcement-test-safety.md`, security review notes, and contributor/architecture/privacy documentation.
+
+## Ordered stages and checkpoint gates
+
+Every stage below has a focused verification, self-review, one or more coherent commits, a remote branch update, and observed CI when the stage changes CI behavior. Stages do not move forward on a known failure.
+
+1. **Independent M1 security review.** Trace protocol crypto, event admission, reconnect, persistence, relay transactions, report verification, privacy, and resource limits. Record findings with severity, evidence, tests, and owner stage. Fix any issue that cannot safely be deferred. Commit/push the review record.
+2. **Windows key protection.** Use the maintained Microsoft `windows` Rust bindings for current-user DPAPI with UI forbidden and no machine scope. Add a versioned envelope binding scheme, session, participant, local store, and bounded protected payload; bind DPAPI optional entropy to those identifiers. Migrate only the exact recognized v1 legacy envelope, atomically, and never treat a failed v2 unprotect as a legacy key. Add real Windows tests for persist/reopen, raw-seed absence, corruption, truncation, and bindings. Observe Windows CI before continuing.
+3. **Unix key storage.** Add safe no-follow file opens, owner checks, strict directory/file modes, bounded reads, create-new writes, file and parent-directory sync, and failed-write cleanup. Test symlinks, non-regular files, wrong bindings, truncation, oversized files, and reopen. Document root/same-user/memory limitations.
+4. **Relay identity storage.** Enforce a private owned parent directory, no-follow regular-file reads, exact file size, create-new behavior, zeroized temporary seeds, durable parent sync, and no replacement of an existing key. Test collision, symlink, permission, truncated, oversized, and repeated-start paths.
+5. **Secret lifecycle.** Review all seed/challenge/invitation handling, reduce raw-seed API surface, use zeroizing containers for temporary copies, and verify no sensitive `Debug`, logs, panic output, or persistence fields expose secrets.
+6. **Registry quality audit.** Audit every record/indicator and source for duplicates, stale/dead links, product/provider conflation, host scope, shared infrastructure, and unsupported claims. Fix or downgrade only evidence-backed entries; publish counts and questionable-record dispositions.
+7. **Registry schema v3.** Define strict typed enums and migration from v2. Indicators carry kind, normalized value, platform/surface/scope, provenance, verification date, confidence, actionability, false-positive risk, lifecycle, and limitations. Encode contradictions as semantic errors; keep research separate from enforcement.
+8. **Indicator research.** Expand only where first-party or upstream sources establish specific values. Add meaningful indicators for hosted/API, coding/IDE/extension/CLI, gateways, local runtimes/servers, and security workflows; every value gets provenance and scope caveats. Avoid generic process names, shared hosts, and universal/custom endpoint claims.
+9. **Semantic validation.** Apply a real Draft 2020-12 validator and deterministic semantic checks, with `ERROR`, `WARNING`, and `INFO`. Cover enums, unique IDs/values, relationships, source resolution, dates, hostname/wildcard/CIDR/port/package syntax, confidence/actionability/risk consistency, bounds, and canonical ordering. Add the required negative fixture corpus and keep warnings visible.
+10. **TUF implementation research and decision.** Compare current upstream `tuf-on-ci`, Amazon `tough`, the TUF project's Rust client, and a mature non-Rust reference client where relevant. Evaluate spec support, tuf-on-ci interoperability, root rotation, expiry/rollback state, offline repositories, maintenance, and dependencies. Do not use a client with a known interoperability flaw or replace it with custom TUF cryptography. Freeze the selected library and publication design in `docs/registry-trust.md` before implementation.
+11. **Registry repository/publication layout.** Keep `registry/` as reviewed source. Select same-repository publication unless upstream tooling and least privilege justify a separate repository. Document source-of-truth, review/signing, metadata publication, target and pinned-root locations. Create another repository only if the selected mature publication workflow requires it and the connected GitHub integration permits it.
+12. **Trust model and key roles.** Document GitHub, PR, maintainer, online signer, root/snapshot/targets/timestamp, mirror, rollback/freeze, and malicious-valid-entry risks. Define practical root threshold, signer roles, rotation/expiry/loss/compromise handling, and explicitly distinguish TUF authenticity from indicator correctness. Never commit private signing keys.
+13. **Deterministic target.** Emit a canonically ordered `registry-v3.json` release target and verify reproducibility byte-for-byte. Keep time-varying data isolated to TUF metadata.
+14. **Registry library and trusted update client.** Add the focused Rust crate. Parse bounded v3 data, expose typed searches/inspection, and verify repository metadata/target hashes through the selected TUF library. Bootstrap only from a checked-in/public pinned root; persist trusted metadata versions safely. Support local/offline repositories and reject unsafe target paths and oversized data.
+15. **TUF attack tests.** Use ephemeral test keys and local repositories to prove valid update, target tampering, rollback, expiry/freeze, authorized root rotation, unauthorized root rejection, mix-and-match rejection where the library supports it, and malformed metadata failure. An attacker-supplied root plus metadata must not replace the compiled/pinned root.
+16. **Offline registry CLI.** Add local `verify`, `inspect`, and `search` commands with stable user-facing statuses and bounded input; show provenance, actionability, confidence, false-positive risk, and limitations. No silent phone-home or enforcement decision.
+17. **Adversarial registry tests.** Cover traversal/absolute targets, symlinks, size/depth/count limits, duplicate keys/IDs, malformed UTF-8/JSON/metadata/signatures, NUL/Unicode edge cases, stale metadata, and arbitrary mirror content.
+18. **CI hardening.** Preserve Linux/PostgreSQL and Windows. Run format, Clippy, all tests, DPAPI tests, registry schema/semantic checks, deterministic target checks, TUF attacks, and cargo audit. Keep job/token permissions minimal, pin Actions, and ensure CI never modifies its network control plane.
+19. **Documentation and contributor safety.** Update product/architecture/privacy/registry docs and exact workflow commands. Add `docs/enforcement-test-safety.md` and link it from `AGENTS.md`, `CONTRIBUTING.md`, and the implementation plan. Future Linux enforcement tests require namespaces/VMs; Windows requires Sandbox/VM where the primitive is represented, otherwise a disposable VM. Isolation unavailable means skip and report; never fall back to host enforcement.
+20. **Full review and integration.** Review all branch diff and sensitive-code searches; run every final local check including PostgreSQL and `cargo audit`; inspect Linux and Windows Actions for the branch; only then fast-forward `main` to the verified commit, inspect final main CI, and confirm clean branch/workspace state.
+
+## Completion evidence
+
+No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.
