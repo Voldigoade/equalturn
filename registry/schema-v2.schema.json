@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:equalturn:registry:schema:v2",
+  "title": "Equalturn AI ecosystem research registry v2",
+  "description": "A provenance-backed research dataset. Structured indicators describe evidence only and are not enforcement rules.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_version", "last_updated", "purpose", "entries"],
+  "properties": {
+    "schema_version": { "const": 2 },
+    "registry_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "last_updated": { "type": "string", "format": "date" },
+    "purpose": { "const": "research_only" },
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/entry" }
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "url", "checked_on", "indicator_assessment"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^source-[1-9][0-9]*$" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https?://" },
+        "checked_on": { "type": "string", "format": "date" },
+        "indicator_assessment": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source-specific research observation and limitations. This is not an enforcement decision."
+        }
+      }
+    },
+    "indicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "scope", "source_id", "limitations"],
+      "properties": {
+        "kind": {
+          "enum": ["domain_exact", "api_host", "url_path", "tcp_listener", "process_name", "package_name"]
+        },
+        "value": { "type": "string", "minLength": 1 },
+        "scope": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What the value identifies, such as a hosted product surface, a documented API host, or a configurable local listener."
+        },
+        "source_id": { "type": "string", "pattern": "^source-[1-9][0-9]*$" },
+        "limitations": {
+          "type": "string",
+          "minLength": 1,
+          "description": "False-positive, configurability, routing, or coverage limits supported by the cited research."
+        }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target_id", "notes"],
+      "properties": {
+        "kind": { "enum": ["routes_to", "provided_by", "integrates_with"] },
+        "target_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "notes": { "type": "string" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "product", "categories", "surfaces", "status", "sources", "indicators", "relationships"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+            "name": { "type": "string", "minLength": 1 },
+            "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          }
+        },
+        "product": { "type": "string", "minLength": 1 },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["hosted_chat", "provider_api", "gateway", "coding_assistant", "ide_assistant", "browser_extension", "desktop_app", "cli_agent", "security_tool", "local_runner", "inference_server", "local_web_ui", "self_hosted_stack", "cloud_marketplace", "multimodal", "search_research", "regional_provider", "router"] }
+        },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Surface vocabulary preserves v1 and adds mobile, browser-integrated, local-server, and Python-library surfaces observed in the research ledger. `self-hosted` is a deployment mode, not a surface; represent it in categories and source assessments.",
+          "items": { "enum": ["web", "api", "desktop", "ide", "browser_extension", "cli", "local_runtime", "server", "local_web_ui", "cloud", "mobile", "browser", "local_server", "python_library"] }
+        },
+        "status": {
+          "enum": ["observed", "unknown", "deprecated", "archived", "disputed"],
+          "description": "Research status as of the source check date. `observed` means a first-party product or documentation source was found; it does not guarantee current operational availability."
+        },
+        "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "indicators": { "type": "array", "items": { "$ref": "#/$defs/indicator" } },
+        "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } }
+      }
+    }
+  }
+}
