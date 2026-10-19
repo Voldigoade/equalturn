@@ -706,7 +706,8 @@ async fn windows_dpapi_corrupted_ciphertext_is_rejected() {
         profile.participant_id.as_uuid()
     ));
     let mut bytes = fs::read(&key_path).expect("read DPAPI key envelope");
-    bytes[59 + (bytes.len() - 59) / 2] ^= 0x80;
+    let protected_payload_byte = 59 + (bytes.len() - 59) / 2;
+    bytes[protected_payload_byte] ^= 0x80;
     fs::write(&key_path, bytes).expect("write corrupted DPAPI payload");
 
     assert!(matches!(
