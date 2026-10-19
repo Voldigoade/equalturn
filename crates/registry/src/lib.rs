@@ -6,7 +6,8 @@ mod repository;
 mod trust;
 
 pub use installed::{
-    load_installed_registry, update_directory_repository, update_https_repository,
+    InstalledRegistry, load_installed_registry, update_directory_repository,
+    update_https_repository,
 };
 pub use model::{
     Actionability, BindScope, Category, Confidence, Ecosystem, Entry, EntryStatus,

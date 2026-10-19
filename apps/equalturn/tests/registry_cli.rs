@@ -89,6 +89,137 @@ fn registry_commands_verify_local_data_before_inspection_or_search() {
     assert!(search.contains("Product: ChatGPT"));
 }
 
+#[test]
+fn explicit_staging_profile_updates_and_reads_only_verified_installed_data() {
+    let repository = support::tuf::signed_repository(REGISTRY_BYTES);
+    let directory = tempfile::tempdir().expect("test directory is created");
+    let root = directory.path().join("root.json");
+    let data_dir = directory.path().join("equalturn-data");
+    fs::write(&root, &repository.root).expect("out-of-band root is written");
+
+    let update = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "update", "--profile", "staging"])
+        .arg("--repository")
+        .arg(repository.path())
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert_success(&update);
+    assert!(String::from_utf8_lossy(&update.stdout).contains("Profile: STAGING"));
+
+    let status = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "status", "--profile", "staging"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert_success(&status);
+    let status = String::from_utf8_lossy(&status.stdout);
+    assert!(status.contains("Verification: VALID"));
+    assert!(status.contains("Locally recorded refresh time:"));
+    assert!(status.contains("TUF timestamp version: 1"));
+    assert!(status.contains("TUF snapshot version: 1"));
+    assert!(status.contains("TUF targets version: 1"));
+
+    let search = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "installed", "search", "--profile", "staging"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .arg("openai")
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert_success(&search);
+    let search = String::from_utf8_lossy(&search.stdout);
+    assert!(search.contains("Profile: STAGING"));
+    assert!(search.contains("Product: ChatGPT"));
+
+    let pointer = data_dir.join("registry/profiles/staging/current.json");
+    let mut pointer_value: serde_json::Value =
+        serde_json::from_slice(&fs::read(&pointer).expect("installed pointer is readable"))
+            .expect("installed pointer is valid JSON");
+    pointer_value["timestamp_version"] = serde_json::json!(u64::MAX);
+    fs::write(
+        &pointer,
+        serde_json::to_vec(&pointer_value).expect("pointer serializes"),
+    )
+    .expect("mutated pointer is written");
+
+    let status = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "status", "--profile", "staging"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert!(
+        !status.status.success(),
+        "mutated TUF version claim is rejected"
+    );
+}
+
+#[test]
+fn production_profile_fails_closed_and_staging_never_discovers_its_root() {
+    let directory = tempfile::tempdir().expect("test directory is created");
+    let data_dir = directory.path().join("equalturn-data");
+
+    let production = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "update", "--profile", "production"])
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert!(!production.status.success());
+    let production = String::from_utf8_lossy(&production.stderr);
+    assert!(production.contains("production registry trust not initialized"));
+    assert!(
+        !data_dir.exists(),
+        "production profile must not initialize state"
+    );
+
+    let staging = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args([
+            "registry",
+            "update",
+            "--profile",
+            "staging",
+            "--url",
+            "https://example.invalid/registry",
+        ])
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert!(!staging.status.success());
+    let staging = String::from_utf8_lossy(&staging.stderr);
+    assert!(staging.contains("out-of-band bootstrap root"));
+    assert!(
+        !data_dir.exists(),
+        "missing root must be rejected before I/O"
+    );
+}
+
 fn invoke_registry(
     subcommand: &str,
     query_or_id: Option<&str>,

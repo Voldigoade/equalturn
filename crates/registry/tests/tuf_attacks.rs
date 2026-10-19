@@ -238,6 +238,46 @@ async fn installed_snapshot_survives_reopen_and_is_reverified_offline() {
     .expect("installed snapshot reopens without network");
     assert_eq!(reopened.target_sha256(), &sha256(REGISTRY_BYTES));
     assert_eq!(reopened.registry(), installed.registry());
+
+    let pointer_path = state.path().join("current.json");
+    let mut legacy_pointer: Value =
+        serde_json::from_slice(&fs::read(&pointer_path).expect("active pointer is readable"))
+            .expect("active pointer parses");
+    legacy_pointer["format_version"] = json!(1);
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("source");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("timestamp_version");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("snapshot_version");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("targets_version");
+    fs::write(
+        &pointer_path,
+        serde_json::to_vec(&legacy_pointer).expect("legacy pointer serializes"),
+    )
+    .expect("legacy pointer is written");
+
+    let migrated = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("version 1 installed pointer remains readable");
+    assert_eq!(migrated.timestamp_version(), 1);
+    assert_eq!(migrated.snapshot_version(), 1);
+    assert_eq!(migrated.targets_version(), 1);
+    assert_eq!(migrated.source(), "legacy install record");
 }
 
 #[tokio::test]

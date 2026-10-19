@@ -1,5 +1,6 @@
 use crate::{
     REGISTRY_MAX_BYTES, REGISTRY_TARGET_PATH, Registry, RegistryError,
+    http_repository::HttpsRepository,
     trust::{VerifiedRegistry, verify_bootstrap_root, verify_https_repository, verify_repository},
 };
 use jiff::Timestamp;
@@ -30,6 +31,62 @@ struct InstalledPointer {
     registry_version: String,
     root_version: u64,
     last_successful_refresh: String,
+    #[serde(default)]
+    source: String,
+    #[serde(default)]
+    timestamp_version: u64,
+    #[serde(default)]
+    snapshot_version: u64,
+    #[serde(default)]
+    targets_version: u64,
+}
+
+pub struct InstalledRegistry {
+    verified: VerifiedRegistry,
+    bootstrap_root_sha256: [u8; 32],
+    last_successful_refresh: Timestamp,
+    source: String,
+    timestamp_version: u64,
+    snapshot_version: u64,
+    targets_version: u64,
+}
+
+impl InstalledRegistry {
+    pub fn registry(&self) -> &Registry {
+        self.verified.registry()
+    }
+
+    pub fn target_sha256(&self) -> &[u8; 32] {
+        self.verified.target_sha256()
+    }
+
+    pub fn trusted_root_version(&self) -> u64 {
+        self.verified.trusted_root_version()
+    }
+
+    pub fn bootstrap_root_sha256(&self) -> &[u8; 32] {
+        &self.bootstrap_root_sha256
+    }
+
+    pub fn last_successful_refresh(&self) -> Timestamp {
+        self.last_successful_refresh
+    }
+
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn timestamp_version(&self) -> u64 {
+        self.timestamp_version
+    }
+
+    pub fn snapshot_version(&self) -> u64 {
+        self.snapshot_version
+    }
+
+    pub fn targets_version(&self) -> u64 {
+        self.targets_version
+    }
 }
 
 pub async fn update_directory_repository(
@@ -38,7 +95,7 @@ pub async fn update_directory_repository(
     bootstrap_root_sha256: &[u8; 32],
     state_dir: &Path,
     now: Timestamp,
-) -> Result<VerifiedRegistry, RegistryError> {
+) -> Result<InstalledRegistry, RegistryError> {
     prepare_state_dir(state_dir)?;
     let cache = state_dir.join("update-cache");
     let update_lock = open_lock(&state_dir.join("update.lock"))?;
@@ -58,6 +115,7 @@ pub async fn update_directory_repository(
         bootstrap_root_sha256,
         &verified,
         now,
+        "local repository".to_owned(),
     )
     .await
 }
@@ -68,7 +126,7 @@ pub async fn update_https_repository(
     bootstrap_root_sha256: &[u8; 32],
     state_dir: &Path,
     now: Timestamp,
-) -> Result<VerifiedRegistry, RegistryError> {
+) -> Result<InstalledRegistry, RegistryError> {
     prepare_state_dir(state_dir)?;
     let cache = state_dir.join("update-cache");
     let update_lock = open_lock(&state_dir.join("update.lock"))?;
@@ -83,6 +141,7 @@ pub async fn update_https_repository(
         bootstrap_root_sha256,
         &verified,
         now,
+        base_url.as_str().to_owned(),
     )
     .await
 }
@@ -92,7 +151,7 @@ pub async fn load_installed_registry(
     bootstrap_root: &[u8],
     bootstrap_root_sha256: &[u8; 32],
     now: Timestamp,
-) -> Result<VerifiedRegistry, RegistryError> {
+) -> Result<InstalledRegistry, RegistryError> {
     verify_bootstrap_root(bootstrap_root, bootstrap_root_sha256)?;
     ensure_real_directory(state_dir, false)?;
     let lock = open_lock(&state_dir.join("install.lock"))?;
@@ -113,8 +172,9 @@ pub async fn load_installed_registry(
         now,
     )
     .await?;
-    verify_pointer_claims(&pointer, &verified)?;
-    Ok(verified)
+    let versions = read_snapshot_versions(&slot_path)?;
+    verify_pointer_claims(&pointer, &verified, &versions)?;
+    installed_from_pointer(verified, pointer, versions)
 }
 
 async fn install_cache_snapshot(
@@ -124,12 +184,13 @@ async fn install_cache_snapshot(
     bootstrap_root_sha256: &[u8; 32],
     verified: &VerifiedRegistry,
     now: Timestamp,
-) -> Result<VerifiedRegistry, RegistryError> {
+    source: String,
+) -> Result<InstalledRegistry, RegistryError> {
     let candidate = tempfile::Builder::new()
         .prefix(".registry-candidate-")
         .tempdir_in(state_dir)
         .map_err(|_| RegistryError::Repository)?;
-    build_repository_snapshot(cache, candidate.path(), bootstrap_root, verified)?;
+    let versions = build_repository_snapshot(cache, candidate.path(), bootstrap_root, verified)?;
 
     let validation_cache = tempfile::tempdir().map_err(|_| RegistryError::Repository)?;
     let candidate_verified = verify_repository(
@@ -167,16 +228,20 @@ async fn install_cache_snapshot(
     sync_directory(state_dir)?;
 
     let pointer = InstalledPointer {
-        format_version: 1,
+        format_version: 2,
         slot: inactive.to_owned(),
         bootstrap_root_sha256: hex(bootstrap_root_sha256),
         target_sha256: hex(verified.target_sha256()),
         registry_version: verified.registry().registry_version().to_owned(),
         root_version: verified.trusted_root_version(),
         last_successful_refresh: now.to_string(),
+        source,
+        timestamp_version: versions.timestamp,
+        snapshot_version: versions.snapshot,
+        targets_version: versions.targets,
     };
     write_pointer(state_dir, &pointer)?;
-    Ok(candidate_verified)
+    installed_from_pointer(candidate_verified, pointer, versions)
 }
 
 fn build_repository_snapshot(
@@ -184,7 +249,7 @@ fn build_repository_snapshot(
     destination: &Path,
     bootstrap_root: &[u8],
     verified: &VerifiedRegistry,
-) -> Result<(), RegistryError> {
+) -> Result<MetadataVersions, RegistryError> {
     let root = read_bounded(&cache.join("root.json"), METADATA_ROOT_LIMIT)?;
     let timestamp = read_bounded(&cache.join("timestamp.json"), METADATA_TIMESTAMP_LIMIT)?;
     let snapshot = read_bounded(&cache.join("snapshot.json"), METADATA_SNAPSHOT_LIMIT)?;
@@ -216,6 +281,7 @@ fn build_repository_snapshot(
         return Err(RegistryError::Repository);
     }
     let timestamp_signed = signed(&timestamp_value)?;
+    let timestamp_version = version(timestamp_signed)?;
     let snapshot_version = referenced_version(timestamp_signed, "snapshot.json")?;
     let snapshot_signed = signed(&snapshot_value)?;
     if version(snapshot_signed)? != snapshot_version {
@@ -300,7 +366,71 @@ fn build_repository_snapshot(
     sync_directory(&metadata_dir)?;
     sync_directory(&target_dir)?;
     sync_directory(destination)?;
-    Ok(())
+    Ok(MetadataVersions {
+        timestamp: timestamp_version,
+        snapshot: snapshot_version,
+        targets: targets_version,
+    })
+}
+
+struct MetadataVersions {
+    timestamp: u64,
+    snapshot: u64,
+    targets: u64,
+}
+
+fn read_snapshot_versions(repository: &Path) -> Result<MetadataVersions, RegistryError> {
+    let metadata_dir = repository.join("metadata");
+    let root = parse_metadata(&read_bounded(
+        &metadata_dir.join("root.json"),
+        METADATA_ROOT_LIMIT,
+    )?)?;
+    let root_signed = signed(&root)?;
+    let consistent_snapshot = root_signed
+        .get("consistent_snapshot")
+        .and_then(serde_json::Value::as_bool)
+        .ok_or(RegistryError::Repository)?;
+
+    let timestamp = parse_metadata(&read_bounded(
+        &metadata_dir.join("timestamp.json"),
+        METADATA_TIMESTAMP_LIMIT,
+    )?)?;
+    let timestamp_signed = signed(&timestamp)?;
+    let timestamp_version = version(timestamp_signed)?;
+    let snapshot_version = referenced_version(timestamp_signed, "snapshot.json")?;
+    let snapshot_name = if consistent_snapshot {
+        format!("{snapshot_version}.snapshot.json")
+    } else {
+        "snapshot.json".to_owned()
+    };
+    let snapshot = parse_metadata(&read_bounded(
+        &metadata_dir.join(snapshot_name),
+        METADATA_SNAPSHOT_LIMIT,
+    )?)?;
+    let snapshot_signed = signed(&snapshot)?;
+    if version(snapshot_signed)? != snapshot_version {
+        return Err(RegistryError::Repository);
+    }
+
+    let targets_version = referenced_version(snapshot_signed, "targets.json")?;
+    let targets_name = if consistent_snapshot {
+        format!("{targets_version}.targets.json")
+    } else {
+        "targets.json".to_owned()
+    };
+    let targets = parse_metadata(&read_bounded(
+        &metadata_dir.join(targets_name),
+        METADATA_TARGETS_LIMIT,
+    )?)?;
+    if version(signed(&targets)?)? != targets_version {
+        return Err(RegistryError::Repository);
+    }
+
+    Ok(MetadataVersions {
+        timestamp: timestamp_version,
+        snapshot: snapshot_version,
+        targets: targets_version,
+    })
 }
 
 fn write_snapshot_file(path: &Path, bytes: &[u8], total: &mut usize) -> Result<(), RegistryError> {
@@ -422,9 +552,9 @@ fn read_pointer_optional(state_dir: &Path) -> Result<Option<InstalledPointer>, R
         Err(error) => return Err(error),
     };
     let value = crate::json::parse_unique(&bytes).map_err(|_| RegistryError::Repository)?;
-    let pointer: InstalledPointer =
+    let mut pointer: InstalledPointer =
         serde_json::from_value(value).map_err(|_| RegistryError::Repository)?;
-    if pointer.format_version != 1
+    if !matches!(pointer.format_version, 1 | 2)
         || !matches!(pointer.slot.as_str(), "a" | "b")
         || !valid_hex(&pointer.bootstrap_root_sha256, 64)
         || !valid_hex(&pointer.target_sha256, 64)
@@ -432,12 +562,32 @@ fn read_pointer_optional(state_dir: &Path) -> Result<Option<InstalledPointer>, R
         || pointer.registry_version.len() > 128
         || pointer.root_version == 0
         || pointer.last_successful_refresh.len() > 64
+        || pointer.last_successful_refresh.is_empty()
         || pointer
             .last_successful_refresh
             .parse::<Timestamp>()
             .is_err()
+        || pointer.source.len() > 2048
+        || (pointer.format_version == 2
+            && (pointer.source.is_empty()
+                || pointer.timestamp_version == 0
+                || pointer.snapshot_version == 0
+                || pointer.targets_version == 0))
     {
         return Err(RegistryError::Repository);
+    }
+    let refresh_time = pointer
+        .last_successful_refresh
+        .parse::<Timestamp>()
+        .map_err(|_| RegistryError::Repository)?;
+    if refresh_time.to_string() != pointer.last_successful_refresh {
+        return Err(RegistryError::Repository);
+    }
+    if pointer.format_version == 1 {
+        pointer.source = "legacy install record".to_owned();
+    } else if pointer.source != "local repository" {
+        let url = Url::parse(&pointer.source).map_err(|_| RegistryError::Repository)?;
+        HttpsRepository::new(&url)?;
     }
     Ok(Some(pointer))
 }
@@ -487,14 +637,52 @@ fn remove_existing_slot(path: &Path) -> Result<(), RegistryError> {
 fn verify_pointer_claims(
     pointer: &InstalledPointer,
     verified: &VerifiedRegistry,
+    versions: &MetadataVersions,
 ) -> Result<(), RegistryError> {
     if pointer.target_sha256 != hex(verified.target_sha256())
         || pointer.root_version != verified.trusted_root_version()
         || pointer.registry_version != verified.registry().registry_version()
+        || (pointer.format_version == 2
+            && (pointer.timestamp_version != versions.timestamp
+                || pointer.snapshot_version != versions.snapshot
+                || pointer.targets_version != versions.targets))
     {
         return Err(RegistryError::Repository);
     }
     Ok(())
+}
+
+fn installed_from_pointer(
+    verified: VerifiedRegistry,
+    pointer: InstalledPointer,
+    versions: MetadataVersions,
+) -> Result<InstalledRegistry, RegistryError> {
+    let bootstrap_root_sha256 = decode_hex_32(&pointer.bootstrap_root_sha256)?;
+    let last_successful_refresh = pointer
+        .last_successful_refresh
+        .parse::<Timestamp>()
+        .map_err(|_| RegistryError::Repository)?;
+    Ok(InstalledRegistry {
+        verified,
+        bootstrap_root_sha256,
+        last_successful_refresh,
+        source: pointer.source,
+        timestamp_version: versions.timestamp,
+        snapshot_version: versions.snapshot,
+        targets_version: versions.targets,
+    })
+}
+
+fn decode_hex_32(value: &str) -> Result<[u8; 32], RegistryError> {
+    if !valid_hex(value, 64) {
+        return Err(RegistryError::Repository);
+    }
+    let mut bytes = [0_u8; 32];
+    for (index, byte) in bytes.iter_mut().enumerate() {
+        let pair = &value[index * 2..index * 2 + 2];
+        *byte = u8::from_str_radix(pair, 16).map_err(|_| RegistryError::Repository)?;
+    }
+    Ok(bytes)
 }
 
 fn valid_hex(value: &str, length: usize) -> bool {

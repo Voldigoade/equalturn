@@ -126,7 +126,7 @@
 - [x] Add RED tests for installed rollback/target tampering, missing/corrupt pointer, symlink store/pointer/metadata paths, and failed candidate replacement.
 - [x] Preserve the existing valid installed target if a refresh fails and its signed metadata remains currently valid.
 - [x] Use temporary same-filesystem snapshots, fsync and atomic pointer replacement; re-open the installed candidate through TUF so metadata-store best-effort writes cannot falsely report success.
-- [x] Verify restart behavior, consistent-snapshot names, authorized root rotation replay, cache-floor behavior, and tampering; focused tests and Clippy pass. (checkpoint commit and push pending)
+- [x] Verify restart behavior, consistent-snapshot names, authorized root rotation replay, cache-floor behavior, and tampering; focused tests and Clippy pass. (commit `9e4b117`, pushed)
 
 ### Task 7: Explicit staging/production trust profiles
 
@@ -138,10 +138,11 @@
 - Consumes: Task 6 installed state and Task 2 production ceremony status.
 - Produces: explicit `registry update`, `status`, `verify`, `inspect`, and `search` flows over verified installed state; production profile returns `production registry trust not initialized` until its pinned root exists.
 
-- [ ] Add RED CLI tests for defaults, staging/production separation, no silent remote root discovery, offline search/status, and friendly error statuses.
-- [ ] Implement explicit update URL/profile selection without coupling it to relay/session identity or background network activity.
-- [ ] Report root/metadata versions, registry version, target digest, source URL, last successful refresh, and expiration state without raw TUF internals.
-- [ ] Run CLI and full Rust tests; commit/push the CLI checkpoint.
+- [x] Add RED CLI tests for staging/production separation, no silent remote root discovery, offline search/status, and friendly verification statuses. (4 CLI tests pass.)
+- [x] Implement explicit update URL/profile selection without coupling it to relay/session identity or background network activity; production remains fail-closed.
+- [x] Report root/metadata versions, registry version, target digest, locally recorded source and refresh time, and current expiry status without raw TUF internals. Signed metadata versions are checked against the installed TUF snapshot.
+- [x] Run focused CLI/registry tests, Clippy and formatting. Registry tests: 49 passed, 1 live smoke test ignored pending compatible staging trust.
+- [ ] Review, commit and push the CLI checkpoint.
 
 ### Task 8: Remote update, attack, and end-to-end tests
 
