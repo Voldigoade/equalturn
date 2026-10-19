@@ -658,6 +658,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "reqwest",
+ "rustix",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -667,6 +668,7 @@ dependencies = [
  "tokio-tungstenite 0.30.0",
  "tracing",
  "uuid",
+ "windows",
  "zeroize",
 ]
 

@@ -34,6 +34,8 @@ The synthetic event hostname is an explicit CLI argument, not a passively observ
 - The relay operator necessarily sees source IP addresses and connection timing at the transport layer. The application evidence schema does not persist or fan out these values. Deployment reverse proxies, firewalls, cloud providers, and operational logging may record transport metadata independently; the operator must document and control those systems.
 - The relay signing private key stays in the relay's persistent identity file. It is not returned to participants; only its public key/fingerprint are sent. Session participant keys are stored locally in separate key files and are not global machine identities.
 
+The relay key file is plaintext at rest. Unix relies on owner-only directory/file permissions; Windows inherits the parent directory's DACL, which operators must restrict to the relay account and administrators. See [relay key storage](relay-key-storage.md) for creation, recovery, backup, and platform limits.
+
 The CLI reports the relay key fingerprint during create/join and saves the relay public key with the local profile. This supports checking future relay responses against the same key for that locally stored profile. A self-contained exported report proves only that its receipts/manifests verify under the included relay key; to identify the expected relay, participants must compare or pin its fingerprint through a trusted out-of-band channel.
 
 ## Retention and deletion
