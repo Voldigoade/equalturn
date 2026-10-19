@@ -4,7 +4,7 @@
 
 ## Participant signing keys
 
-`SigningSeed` owns a `zeroize::Zeroizing<[u8; 32]>`. It is intentionally not `Clone`, `Debug`, or serializable. `SigningIdentity` also has no `Debug` or serde implementation. Callers borrow a seed to construct an identity and receive another `SigningSeed` wrapper when exporting one for persistence. Client persistence keeps seed-bearing read/write buffers in zeroizing allocations. Windows protects the persisted participant seed with current-user DPAPI; Unix stores it in an owner-only key file. See [client key storage](client-key-storage.md) for file formats and OS boundaries.
+`SigningSeed` owns a `zeroize::Zeroizing<[u8; 32]>`. It is intentionally not `Clone`, `Debug`, or serializable. `SigningIdentity` also has no `Debug` or serde implementation. Callers borrow a seed to construct an identity and receive another `SigningSeed` wrapper when exporting one for persistence. Client persistence keeps seed-bearing read/write buffers in zeroizing allocations. Windows protects the persisted participant seed with current-user DPAPI; Unix stores it in an owner-only key file. See [client key storage](key-storage.md) for file formats and OS boundaries.
 
 The locked `ed25519-dalek` version is 3.0.0. Its default feature set includes `zeroize`, and its `SigningKey` drop implementation zeroizes its internal secret-key array. This reduces ordinary heap lifetime; it does not guarantee erasure from registers, compiler-generated copies, swap, hibernation, crash dumps, a debugger, or a compromised process. `SigningIdentity` does not expose the library's `Clone` implementation.
 

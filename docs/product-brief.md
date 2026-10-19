@@ -1,6 +1,6 @@
 # Product brief
 
-**Status:** Equalturn's product direction remains a voluntary, best-effort integrity environment. Milestone 1 is a locally verified, non-enforcing Rust CLI/relay implementation; this brief separates what exists from the future product.
+**Status:** Equalturn's product direction remains a voluntary, best-effort integrity environment. Milestone 1 provides a non-enforcing Rust CLI/relay; Milestone 1.5 adds local registry-trust plumbing and key-storage hardening. The production registry root/release and all endpoint enforcement remain absent; this brief separates what exists from the future product.
 
 ## Problem
 
@@ -12,7 +12,7 @@ The intended product pairs a local agent on each participant's Windows or Linux 
 
 ## Milestone 1 implementation
 
-The current CLI and relay implement pseudonymous session create/join, invitation codes, fresh per-session signing identities, signed event chains, relay receipts and notices, heartbeats/liveness, reconnect and replay, a durable local outbox, session start/end, and JSON/Markdown report export with offline verification. The only AI-related CLI event is a user-triggered **synthetic** event. Milestone 1 does not inspect, block, or detect workstation AI use and does not consume the AI research registry. See [architecture.md](architecture.md) and the normative [protocol-v1.md](protocol-v1.md).
+The session CLI and relay implement pseudonymous session create/join, invitation codes, fresh per-session signing identities, signed event chains, relay receipts and notices, heartbeats/liveness, reconnect and replay, a durable local outbox, session start/end, and JSON/Markdown report export with offline verification. The only AI-related session event is a user-triggered **synthetic** event. They do not inspect, block, or detect workstation AI use and do not use registry indicators as policy. A separate registry CLI verifies caller-selected local TUF repositories and can inspect/search validated entries; there is no production root, signed public release, network updater, or enforcement integration. See [architecture.md](architecture.md), [registry trust](registry-trust.md), and the normative [protocol-v1.md](protocol-v1.md).
 
 ## Target users and primary use case
 

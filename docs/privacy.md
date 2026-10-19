@@ -1,6 +1,6 @@
 # Privacy and reporting model
 
-**Status:** Milestone 1's data model and collection boundaries are implemented in the client, relay, and report verifier. The telemetry modes below are future design options; none is selectable or implemented. The implementation collects no workstation activity telemetry. Verification results and deferred work are recorded in [implementation-roadmap.md](implementation-roadmap.md).
+**Status:** Milestones 1 and 1.5 implement the session data model, collection boundaries, key storage, reports, and local registry verification. The telemetry modes below are future design options; none is selectable or implemented. The implementation collects no workstation activity telemetry. Verification results and deferred work are recorded in [implementation-roadmap.md](implementation-roadmap.md).
 
 ## Milestone 1 collection
 
@@ -13,7 +13,7 @@ The client currently collects or creates only the data needed to join and verify
 
 The report JSON contains protocol and report-schema versions, session ID, participant IDs/nicknames/public keys/fingerprints, participant-reported client and coarse OS metadata, participant events, relay receipts/notices, relay identity, final manifest when available, and local-only unreceipted events. Verification status is computed from the included evidence. Participant timestamps are untrusted; relay receive times/order are relay claims.
 
-This milestone does not observe protection state, application/process launches, network requests, browser/IDE activity, or workstation integrity. It does not consume the AI registry. There is no tray UI, enforcement service, privacy-mode selector, or hidden telemetry collector.
+No current component observes protection state, application/process launches, network requests, browser/IDE activity, or workstation integrity. The separate registry CLI reads only a caller-selected local TUF repository after verification; neither session operation nor relay behavior uses registry indicators as policy. There is no tray UI, enforcement service, privacy-mode selector, or hidden telemetry collector.
 
 ## Deliberately not collected
 

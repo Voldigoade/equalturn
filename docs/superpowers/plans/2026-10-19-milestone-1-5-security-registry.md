@@ -56,7 +56,7 @@ Every stage below has a focused verification, self-review, one or more coherent 
 16. **Offline registry CLI.** Add local `verify`, `inspect`, and `search` commands with stable user-facing statuses and bounded input; show provenance, actionability, confidence, false-positive risk, and limitations. No silent phone-home or enforcement decision.
 17. **Adversarial registry tests.** Cover traversal/absolute targets, symlinks, size/depth/count limits, duplicate keys/IDs, malformed UTF-8/JSON/metadata/signatures, NUL/Unicode edge cases, stale metadata, and arbitrary mirror content.
 18. **CI hardening.** Preserve Linux/PostgreSQL and Windows. Run format, Clippy, all tests, DPAPI tests, registry schema/semantic checks, deterministic target checks, TUF attacks, and cargo audit. Keep job/token permissions minimal, pin Actions, and ensure CI never modifies its network control plane.
-19. **Documentation and contributor safety.** Update product/architecture/privacy/registry docs and exact workflow commands. Add `docs/enforcement-test-safety.md` and link it from `AGENTS.md`, `CONTRIBUTING.md`, and the implementation plan. Future Linux enforcement tests require namespaces/VMs; Windows requires Sandbox/VM where the primitive is represented, otherwise a disposable VM. Isolation unavailable means skip and report; never fall back to host enforcement.
+19. **Documentation and contributor safety.** Update product/architecture/privacy/registry docs and exact workflow commands. The permanent [enforcement-test-safety.md](../../enforcement-test-safety.md) policy is linked from `AGENTS.md`, `CONTRIBUTING.md`, this plan, and the architecture/matrix docs. Future Linux enforcement tests require namespaces/VMs; Windows requires Sandbox/VM where the primitive is represented, otherwise a disposable VM. Isolation unavailable means skip and report; never fall back to host enforcement.
 20. **Full review and integration.** Review all branch diff and sensitive-code searches; run every final local check including PostgreSQL and `cargo audit`; inspect Linux and Windows Actions for the branch; only then fast-forward `main` to the verified commit, inspect final main CI, and confirm clean branch/workspace state.
 
 ## Checkpoint notes
@@ -108,6 +108,18 @@ Verification observed on pushed commit `47a9ac1f1b556e68cc75cc6d8271bc89b52b77e3
 - GitHub Actions run [39308964800](https://github.com/Voldigoade/equalturn/actions/runs/39308964800) — Linux/PostgreSQL passed, including the new deterministic target step; Windows workspace build/tests passed.
 - `git diff --check` — passed before commit.
 - The deterministic builder could not be run in the local environment because its Python 3.14 installation has neither `pip` nor `venv`, and the bundled Python lacks `jsonschema`. The exact two-build command ran successfully in the GitHub Linux job after installing the pinned `requirements-registry.txt` dependencies.
+
+### Stage 19 — documentation and contributor safety
+
+Updated the README, product brief, architecture, privacy, registry, repository, roadmap, and security-review docs to distinguish current M1/M1.5 behavior from future enforcement. The registry CLI is documented as explicit, directory-only, and rooted in caller-supplied trust; the session client/relay do not apply registry indicators. The publication repository still has no Equalturn root or signed release. Contributor guidance now covers source provenance, confidence/actionability/false-positive reasoning, validation, deterministic target generation, review, and the disabled signing ceremony.
+
+Added [the permanent enforcement-test safety policy](../../enforcement-test-safety.md) and linked it from `AGENTS.md`, `CONTRIBUTING.md`, the implementation plan, architecture, roadmap, and enforcement matrix. It prohibits experimental enforcement on the active development host; requires Linux VM/network-namespace or appropriate Windows Sandbox/VM isolation; and requires dangerous tests to be skipped and reported when safe isolation is unavailable. It explicitly states these are developer/CI safeguards, not participant anti-bypass controls. Added `.venv/` to `.gitignore` for the documented isolated registry Python environment and corrected a stale key-storage documentation link.
+
+Stage 19 review observed:
+
+- A local Markdown-link audit over 29 files — passed after fixing the stale key-storage link.
+- Search for machine-local absolute paths in Markdown, `git diff --check` — passed.
+- No enforcement, network, or firewall tests were run.
 
 ## Completion evidence
 

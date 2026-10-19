@@ -2,7 +2,7 @@
 
 Equalturn is a privacy-conscious integrity session system for people who mutually agree to compete without AI assistance. It gives participants pseudonymous session identities and a shared, signed record of events accepted by a relay.
 
-**Status: Milestone 1 is implemented; Milestone 1.5 security hardening and trusted-registry work is in progress.** The Rust workspace contains a CLI client, a PostgreSQL-backed relay, a versioned signed-event protocol, a durable local event queue, and offline report and registry verifiers. Registry commands verify local TUF repositories against an independently pinned root. No production Equalturn registry root or signed release has been created. The product remains non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
+**Status: Milestones 1 and 1.5 are implemented on this branch.** The Rust workspace contains a CLI client, PostgreSQL-backed relay, signed-event protocol, durable local event queue, verifiable reports, hardened participant-key storage, registry v3 validation, and an explicit offline TUF registry verifier. Registry commands verify a caller-selected local repository against an independently supplied root and SHA-256 pin. The publication repository has no production Equalturn root or signed release. The product remains non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
 
 Participant signatures prove which session key made a claim and whether the included event chain was changed. Relay signatures attest to event receipt/order and to the final manifest. Neither proves that a client observed reality honestly, that an event was not omitted before signing, or that the relay did not withhold evidence. A workstation administrator, second device, virtual machine, remote host, or compromised client remains outside the guarantees of this milestone.
 
@@ -18,12 +18,15 @@ Participant signatures prove which session key made a claim and whether the incl
 - [Indicator expansion review](docs/research/registry-indicator-expansion.md)
 - [Registry v3 schema and migration](docs/research/registry-schema-v3.md)
 - [Privacy and report model](docs/privacy.md)
+- [Trusted registry distribution and current limits](docs/registry-trust.md)
+- [Enforcement test safety policy](docs/enforcement-test-safety.md)
 - [Secret lifecycle and storage limits](docs/secret-lifecycle.md)
 - [Prior art](docs/prior-art.md)
 - [Stack decision](docs/stack-decision.md)
 - [Name research](docs/naming.md)
 - [Implementation roadmap](docs/implementation-roadmap.md)
 - [Milestone 1 implementation plan and verification evidence](docs/milestone-one-implementation-plan.md)
+- [Milestone 1.5 implementation plan and checkpoints](docs/superpowers/plans/2026-10-19-milestone-1-5-security-registry.md)
 - [Research sources](docs/research/sources.md)
 
 ## What Milestone 1 implements
@@ -37,7 +40,14 @@ Participant signatures prove which session key made a claim and whether the incl
 - Export a JSON evidence bundle and Markdown summary. Verify participant events, chains, receipts, relay notices, and final manifest offline.
 - Submit an explicitly synthetic `ai-access-attempt` event to exercise the same event path; this is not an observed or blocked access attempt.
 
-The protocol, limits, signatures, reconnect behavior, retention rules, and known limitations are specified in [protocol v1](docs/protocol-v1.md). The researched AI registry now includes structured product, package, extension, executable, and runtime indicators; it remains separate from enforcement and is not loaded by the client or relay.
+The protocol, limits, signatures, reconnect behavior, retention rules, and known limitations are specified in [protocol v1](docs/protocol-v1.md). The researched AI registry includes structured product, package, extension, executable, and runtime indicators. The session client and relay do not use it for policy; only the separate registry CLI reads a locally verified TUF target.
+
+## Milestone 1.5 implementation boundary
+
+- Participant session keys use current-user DPAPI on Windows and owner-only descriptor-relative storage on supported Unix systems. These protect data at rest within their documented limits; they do not resist the same user, administrator/root, or process-memory compromise.
+- The registry CLI verifies local directory repositories against a root and digest supplied out of band, checks bounded TUF metadata/targets, and supports `verify`, `inspect`, and `search`. It has no HTTP updater or production root.
+- The registry remains a sourced research catalogue. No registry indicator drives enforcement, and no daemon/service, firewall rule, process observation/blocking, browser/IDE monitoring, or tray UI exists.
+- Future enforcement testing must follow the [isolated-environment safety policy](docs/enforcement-test-safety.md). No experimental enforcement may run on the active development host.
 
 ## Offline registry commands
 
@@ -130,9 +140,14 @@ Useful verification commands:
 ```sh
 cargo fmt --all -- --check
 python3 tools/validate_registry.py
+python3 tools/validate_registry_v3.py
+python3 tools/build_registry_release.py --output dist/registry-v3.json
+python3 tools/build_registry_release.py --output dist/registry-v3.json --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 ```
+
+The v3 validator and deterministic target builder require the pinned Python package in `requirements-registry.txt`. Install it in a virtual environment (`python3 -m venv .venv`, activate `.venv`, then `python -m pip install -r requirements-registry.txt`). The generated `dist/` directory is ignored build output, not a maintained source file.
 
 ## Privacy and trust boundary
 
@@ -146,4 +161,4 @@ Apache-2.0. Its explicit contributor patent license is useful for a systems proj
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Keep research claims sourced and distinguish verified facts, inference, proposed design, and unresolved risk. Do not claim complete AI detection or resistance to a workstation administrator. The AI registry remains research data until separately reviewed; it is not enforcement policy.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Keep research claims sourced and distinguish verified facts, inference, proposed design, and unresolved risk. Do not claim complete AI detection or resistance to a workstation administrator. The AI registry remains research data; TUF authenticates publication but cannot prove indicator truth or make an indicator enforcement policy.

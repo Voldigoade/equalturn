@@ -45,13 +45,13 @@ These rules are review criteria, not claims that the registry can prove an indic
 The v2 migration is a deterministic, conservative import utility. V2 is retained as historical input; v3 is independently curated after import. Do not run `--force` against the checked-in `registry/registry-v3.json` after curation because that would erase v3-only research and classifications. Determinism is covered by the migration unit tests. To inspect a fresh migration without touching the maintained target, write it to a separate path:
 
 ```sh
-python3 tools/migrate_registry_v2_to_v3.py --output /tmp/registry-v3-import.json
+python3 tools/migrate_registry_v2_to_v3.py --output dist/registry-v3-import.json
 ```
 
 Only during an intentional re-import should an existing temporary output be replaced:
 
 ```sh
-python3 tools/migrate_registry_v2_to_v3.py --output /tmp/registry-v3-import.json --force
+python3 tools/migrate_registry_v2_to_v3.py --output dist/registry-v3-import.json --force
 ```
 
 The migration rejects unsupported schema versions, unknown v2 indicator kinds, unresolved source references, unrepresentable URL paths, and malformed/out-of-range loopback listeners. It sorts entries, categories, product surfaces, numeric local source IDs, indicators, relationships, and aliases, then serializes UTF-8 JSON with fixed indentation and one trailing newline. Existing outputs are not overwritten unless `--force` is passed. The importer is not a generator for the curated v3 dataset.

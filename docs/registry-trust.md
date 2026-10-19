@@ -97,7 +97,7 @@ python3 tools/build_registry_release.py --output dist/registry-v3.json
 python3 tools/build_registry_release.py --output dist/registry-v3.json --check
 ```
 
-The checked-in snapshot currently emits 152,438 bytes with SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`. On 19 October 2026, two independent builds matched byte-for-byte and the generated target passed the v3 schema/semantic validator. CI will repeat the generation-and-compare check in its dedicated hardening stage.
+The checked-in snapshot currently emits 152,438 bytes with SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`. On 19 October 2026, two independent builds matched byte-for-byte and the generated target passed the v3 schema/semantic validator. CI repeats the generation-and-compare check in its dedicated hardening step.
 
 ## Security boundary and constraints
 

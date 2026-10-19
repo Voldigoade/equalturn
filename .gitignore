@@ -1,5 +1,6 @@
 # Rust build output
 /target/
+.venv/
 
 # Native build output
 /build/
