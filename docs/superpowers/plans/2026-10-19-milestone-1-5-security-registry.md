@@ -99,6 +99,16 @@ Focused verification observed for Stage 17:
 - `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry --all-targets --all-features --offline -- -D warnings` — passed.
 - `cargo fmt --all -- --check` and `git diff --check` — passed.
 
+### Stage 18 — CI hardening
+
+The existing CI already uses full-SHA-pinned third-party actions and workflow-level `contents: read`; Linux runs dependency audit, v2/v3 registry validation, Python validator tests, Clippy, and the workspace/PostgreSQL suite, while Windows runs the full workspace suite including the real DPAPI identity tests. Added an explicit deterministic target check that writes one build under `$RUNNER_TEMP` and compares a second build against it. This avoids relying on `dist/`, which is intentionally ignored and absent in a fresh checkout. No workflow write permissions or host-network enforcement were added.
+
+Verification observed on pushed commit `47a9ac1f1b556e68cc75cc6d8271bc89b52b77e3`:
+
+- GitHub Actions run [39308964800](https://github.com/Voldigoade/equalturn/actions/runs/39308964800) — Linux/PostgreSQL passed, including the new deterministic target step; Windows workspace build/tests passed.
+- `git diff --check` — passed before commit.
+- The deterministic builder could not be run in the local environment because its Python 3.14 installation has neither `pip` nor `venv`, and the bundled Python lacks `jsonschema`. The exact two-build command ran successfully in the GitHub Linux job after installing the pinned `requirements-registry.txt` dependencies.
+
 ## Completion evidence
 
 No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.
