@@ -26,7 +26,73 @@ class RegistrySchemaV3Tests(unittest.TestCase):
         )
 
     def test_checked_in_v3_registry_passes_draft_2020_12_validation(self):
-        self.assertEqual(VALIDATOR_MODULE.validate(), (129, 58))
+        self.assertEqual(
+            VALIDATOR_MODULE.validate(),
+            (
+                len(self.registry["entries"]),
+                sum(len(entry["indicators"]) for entry in self.registry["entries"]),
+            ),
+        )
+
+    def test_researched_identifiers_cover_major_local_and_editor_surfaces(self):
+        indicators = [
+            indicator
+            for entry in self.registry["entries"]
+            for indicator in entry["indicators"]
+        ]
+        values = {(item["kind"], item["value"]) for item in indicators}
+
+        self.assertIn(("vscode_extension_id", "anthropic.claude-code"), values)
+        self.assertIn(("vscode_extension_id", "github.copilot"), values)
+        self.assertIn(("package_name", "@moonshot-ai/kimi-code"), values)
+        self.assertIn(("container_image", "ghcr.io/open-webui/open-webui"), values)
+        self.assertIn(("executable_name", "vllm"), values)
+
+    def test_research_indicators_do_not_authorize_blocking(self):
+        self.assertFalse(
+            any(
+                indicator["actionability"] == "blocking_candidate"
+                for entry in self.registry["entries"]
+                for indicator in entry["indicators"]
+            )
+        )
+
+    def test_local_listener_ports_are_explicitly_unsafe_to_block(self):
+        listeners = [
+            indicator
+            for entry in self.registry["entries"]
+            for indicator in entry["indicators"]
+            if indicator["kind"] == "local_port"
+        ]
+
+        self.assertEqual(len(listeners), 3)
+        self.assertTrue(
+            all(
+                indicator["actionability"] == "unsafe_to_block"
+                and indicator["false_positive_risk"] == "high"
+                for indicator in listeners
+            )
+        )
+
+    def test_every_indicator_resolves_entry_local_provenance(self):
+        for entry in self.registry["entries"]:
+            source_ids = {source["id"] for source in entry["sources"]}
+            for indicator in entry["indicators"]:
+                self.assertIn(indicator["source_id"], source_ids, entry["id"])
+
+    def test_archived_roo_code_identifier_is_not_currently_actionable(self):
+        entry = next(
+            item for item in self.registry["entries"]
+            if item["id"] == "roo-code-vs-code-agent"
+        )
+        indicator = next(
+            item for item in entry["indicators"]
+            if item["kind"] == "vscode_extension_id"
+        )
+
+        self.assertEqual(entry["status"], "archived")
+        self.assertEqual(indicator["lifecycle"], "archived")
+        self.assertEqual(indicator["actionability"], "research_only")
 
     def test_schema_rejects_unknown_actionability(self):
         registry = copy.deepcopy(self.registry)

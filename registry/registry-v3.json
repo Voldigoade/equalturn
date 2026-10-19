@@ -1,6 +1,6 @@
 {
   "schema_version": 3,
-  "registry_version": "0.3.0",
+  "registry_version": "0.4.0",
   "last_updated": "2026-10-19",
   "purpose": "research_only",
   "entries": [
@@ -40,10 +40,10 @@
           "scope": "Hosted Adobe Firefly product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`firefly.adobe.com` product host; Firefly features are also embedded in Creative Cloud."
         }
       ],
@@ -86,10 +86,10 @@
           "scope": "Documented AI21 API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.ai21.com` documented; account/private deployment variants need separate evidence."
         }
       ],
@@ -117,9 +117,35 @@
           "url": "https://aider.chat/docs/",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Supports many providers and local endpoints; no fixed provider/domain indicator."
+        },
+        {
+          "id": "source-2",
+          "url": "https://aider.chat/docs/install.html",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Aider installation documentation names the PyPI distribution `aider-chat` and documents isolated environment installation."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "aider-chat",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Aider CLI PyPI distribution",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "An installed distribution does not prove invocation; Python environments, source installs, renamed entry points, and configured providers vary.",
+          "ecosystem": "pypi"
+        }
+      ],
       "relationships": []
     },
     {
@@ -215,10 +241,10 @@
           "scope": "Hosted Qwen Chat product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`chat.qwen.ai` exact host; Alibaba also offers regional cloud APIs."
         }
       ],
@@ -245,10 +271,42 @@
           "url": "https://qwen.ai/qwencode",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Official project confirms CLI; provider behavior can depend on account/configuration."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/QwenLM/qwen-code/blob/main/docs/developers/development/npm.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Qwen Code upstream npm publication guide identifies the user-facing CLI distribution package."
         }
       ],
-      "indicators": [],
-      "relationships": []
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "@qwen-code/qwen-code",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Official Qwen Code npm package",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Installation does not prove invocation; Qwen Code can connect to multiple configured providers and can run from a standalone distribution.",
+          "ecosystem": "npm"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "integrates_with",
+          "target_id": "alibaba-cloud-qwen-model-studio-dashscope",
+          "notes": "Qwen Code documents Alibaba Model Studio as a supported provider; provider selection is configurable."
+        }
+      ]
     },
     {
       "id": "anomaly-opencode-opencode",
@@ -316,10 +374,10 @@
           "scope": "Documented Anthropic API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Exact host `api.anthropic.com` documented."
         }
       ],
@@ -362,10 +420,10 @@
           "scope": "Hosted Claude web product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`claude.ai` exact host; API and other clients are separate."
         }
       ],
@@ -408,10 +466,10 @@
           "scope": "Documented Cursor Agent CLI process/executable name",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "medium",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`cursor-agent` is documented but rename/rebuild/custom endpoint bypasses process matching."
         }
       ],
@@ -466,10 +524,35 @@
           "id": "source-1",
           "url": "https://docs.aws.amazon.com/amazonq/latest/qdeveloper-ug/what-is.html",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "AWS account/region and IDE surfaces vary; no single endpoint safely isolates Q usage."
+          "indicator_assessment": "AWS account/region and IDE surfaces vary; no single endpoint safely isolates Q usage. AWS Marketplace lists the IDE plugin and announces end of plugin support on 30 April 2027."
+        },
+        {
+          "id": "source-2",
+          "url": "https://marketplace.visualstudio.com/items?itemName=AmazonWebServices.amazon-q-vscode",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "AWS Marketplace listing identifies the Amazon Q Developer IDE plugin and states plugin support ends 30 April 2027."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "amazonwebservices.amazon-q-vscode",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Amazon Q Developer VS Code Marketplace extension identifier",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "AWS announced IDE plugin support ends 30 April 2027; installation does not prove use, and other Amazon Q surfaces are not covered."
+        }
+      ],
       "relationships": []
     },
     {
@@ -585,9 +668,36 @@
           "url": "https://docs.litellm.ai/docs/simple_proxy",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Deployment hostname and port are operator-configured; no static global indicator."
+        },
+        {
+          "id": "source-2",
+          "url": "https://docs.litellm.ai/docs/proxy/management_cli",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "LiteLLM official docs describe its Python distribution and `lite` proxy-management CLI."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "litellm",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "python_library",
+            "server"
+          ],
+          "scope": "LiteLLM Python distribution name",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "LiteLLM is configurable routing software; package presence does not prove a proxy is running or that traffic contains AI requests.",
+          "ecosystem": "pypi"
+        }
+      ],
       "relationships": []
     },
     {
@@ -710,10 +820,10 @@
           "scope": "First-party Doubao web product host from the product URL",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "First-party product host is a candidate; localized app surfaces and API hosts differ."
         }
       ],
@@ -784,10 +894,10 @@
           "scope": "Shared Canva design platform hostname containing Magic Studio",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`canva.com` is shared with non-AI design tools; broad host blocking has high false-positive risk."
         }
       ],
@@ -830,10 +940,10 @@
           "scope": "Documented Cerebras inference API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.cerebras.ai` documented; API requests can be routed through gateways."
         }
       ],
@@ -875,10 +985,10 @@
           "scope": "Hosted Character.AI product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`character.ai` exact host; character roleplay and general assistant use share the service."
         }
       ],
@@ -906,9 +1016,59 @@
           "url": "https://docs.anthropic.com/en/docs/claude-code/overview",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Gateway and custom endpoint configuration documented; no single mandatory network route."
+        },
+        {
+          "id": "source-2",
+          "url": "https://docs.anthropic.com/en/docs/claude-code/getting-started",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Anthropic install guide documents the npm distribution name. Exact package identity indicates installation, not active use or provider routing."
+        },
+        {
+          "id": "source-3",
+          "url": "https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Official Visual Studio Marketplace listing identifies Anthropic Claude Code for VS Code."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "@anthropic-ai/claude-code",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Official npm package for Claude Code CLI",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Package can be removed, repackaged, or invoked from a different install; package presence does not prove use or identify remote requests.",
+          "ecosystem": "npm"
+        },
+        {
+          "kind": "vscode_extension_id",
+          "value": "anthropic.claude-code",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Official Claude Code VS Code extension identifier",
+          "source_id": "source-3",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "An extension ID establishes an installed marketplace identity only; VS Code profiles, forks, sideloading, and remote extension hosts can differ."
+        }
+      ],
       "relationships": []
     },
     {
@@ -934,9 +1094,34 @@
           "url": "https://github.com/cline/cline/blob/main/docs/sdk/model-providers.mdx",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Provider and base URL are configurable; no fixed provider destination."
+        },
+        {
+          "id": "source-2",
+          "url": "https://marketplace.visualstudio.com/items?itemName=saoudrizwan.claude-dev",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "The official Marketplace page for Cline uses this publisher and extension identifier and describes the agent extension."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "saoudrizwan.claude-dev",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Cline VS Code extension identifier",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Cline supports local models and configurable providers; extension presence alone does not identify which model or provider is used."
+        }
+      ],
       "relationships": []
     },
     {
@@ -1031,10 +1216,10 @@
           "scope": "Documented Cohere compatibility API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.cohere.ai` documented by compatibility API; private deployments can differ."
         }
       ],
@@ -1075,10 +1260,10 @@
           "scope": "Hosted Consensus product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`consensus.app` exact host; search/research features share the service."
         }
       ],
@@ -1106,9 +1291,34 @@
           "url": "https://docs.continue.dev/customize/overview",
           "checked_on": "2026-10-19",
           "indicator_assessment": "User-configurable providers, local models, and `apiBase` make network indicator non-exclusive."
+        },
+        {
+          "id": "source-2",
+          "url": "https://marketplace.visualstudio.com/items/?itemName=Continue.continue",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Continue-maintained VS Code Marketplace listing identifies the extension and its agent, chat, edit, and autocomplete surfaces."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "continue.continue",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Continue VS Code extension identifier",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Continue supports configurable providers and local models; installation does not prove use or identify the selected backend."
+        }
+      ],
       "relationships": []
     },
     {
@@ -1177,10 +1387,10 @@
           "scope": "Documented DeepInfra inference API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.deepinfra.com` documented by API references; model endpoint path varies."
         }
       ],
@@ -1223,10 +1433,10 @@
           "scope": "Documented DeepSeek API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.deepseek.com` documented; proxies and compatible gateways bypass this destination."
         }
       ],
@@ -1269,10 +1479,10 @@
           "scope": "Hosted DeepSeek Chat product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`chat.deepseek.com` exact host; does not cover API/gateway use."
         }
       ],
@@ -1316,10 +1526,10 @@
           "scope": "Documented Eden AI unified API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`api.edenai.run` service host; multiple AI tasks share the API and model selection is per request."
         }
       ],
@@ -1387,10 +1597,10 @@
           "scope": "Hosted Elicit product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`elicit.com` exact host; a product hostname does not identify exported or API-mediated use."
         }
       ],
@@ -1434,10 +1644,10 @@
           "scope": "Documented Fireworks API hostname shared by multiple product APIs",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`api.fireworks.ai` documented; multiple product APIs share the host."
         }
       ],
@@ -1478,10 +1688,10 @@
           "scope": "Hosted Gamma product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`gamma.app` exact product host; presentation and document generation are not separable by hostname."
         }
       ],
@@ -1508,9 +1718,35 @@
           "url": "https://github.com/google-gemini/gemini-cli",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Official source confirms CLI surface; process metadata is mutable and no exclusive signature asserted."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/package.json",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Google-maintained package manifest declares the published npm package name and CLI package."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "@google/gemini-cli",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Official Gemini CLI npm package",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Package identity indicates distribution, not invocation; binaries can be renamed, rebuilt, or run remotely.",
+          "ecosystem": "npm"
+        }
+      ],
       "relationships": []
     },
     {
@@ -1535,9 +1771,58 @@
           "url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
           "checked_on": "2026-10-19",
           "indicator_assessment": "`llama-server` default `127.0.0.1:8080` documented; configurable and shared by unrelated apps."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "llama.cpp server documentation names the `llama-server` executable and describes configurable server behavior."
+        },
+        {
+          "id": "source-3",
+          "url": "https://github.com/ggml-org/llama.cpp/blob/master/docs/docker.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "llama.cpp upstream Docker guide documents this server image tag and states that it contains `llama-server`."
         }
       ],
       "indicators": [
+        {
+          "kind": "container_image",
+          "value": "ghcr.io/ggml-org/llama.cpp:server",
+          "platforms": [
+            "linux"
+          ],
+          "surfaces": [
+            "server"
+          ],
+          "scope": "Published llama.cpp server OCI image reference",
+          "source_id": "source-3",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Image references in local manifests do not prove a container is running; images may be mirrored, retagged, rebuilt, or referenced remotely."
+        },
+        {
+          "kind": "executable_name",
+          "value": "llama-server",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "local_runtime",
+            "server"
+          ],
+          "scope": "llama.cpp inference server executable name",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "The executable can be renamed or rebuilt; server defaults are configurable and this name does not establish model use."
+        },
         {
           "kind": "local_port",
           "value": "8080",
@@ -1550,10 +1835,10 @@
           "scope": "Documented llama-server default local listener",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "unsafe_to_block",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`llama-server` default `127.0.0.1:8080` documented; configurable and shared by unrelated apps.",
           "bind_scope": "loopback"
         }
@@ -1581,9 +1866,58 @@
           "url": "https://docs.github.com/en/copilot/get-started/where-to-use-github-copilot",
           "checked_on": "2026-10-19",
           "indicator_assessment": "No exclusive process/domain indicator asserted; editor and account infrastructure are shared."
+        },
+        {
+          "id": "source-2",
+          "url": "https://marketplace.visualstudio.com/items?itemName=GitHub.copilot",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "GitHub Marketplace listing identifies the Copilot extension and describes inline AI coding suggestions."
+        },
+        {
+          "id": "source-3",
+          "url": "https://marketplace.visualstudio.com/items?itemName=GitHub.copilot-chat",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "GitHub Marketplace listing identifies the Copilot Chat extension and its conversational and agent features."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "github.copilot",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "GitHub Copilot VS Code extension identifier",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "The extension can select multiple model/service features and is only one VS Code distribution surface; presence does not prove activity."
+        },
+        {
+          "kind": "vscode_extension_id",
+          "value": "github.copilot-chat",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "GitHub Copilot Chat VS Code extension identifier",
+          "source_id": "source-3",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "VS Code versions and Visual Studio package surfaces differ; an extension ID indicates installation only, not use."
+        }
+      ],
       "relationships": []
     },
     {
@@ -1649,10 +1983,10 @@
           "scope": "Google AI Studio developer playground hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`aistudio.google.com` is a developer playground surface, not the only Gemini API route."
         }
       ],
@@ -1724,10 +2058,10 @@
           "scope": "Hosted Gemini web product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`gemini.google.com` exact host; shared Google services remain outside this match."
         }
       ],
@@ -1770,11 +2104,56 @@
           "scope": "Documented Gemini Developer API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`generativelanguage.googleapis.com` documented; this does not cover Vertex or proxies."
+        }
+      ],
+      "relationships": []
+    },
+    {
+      "id": "google-gemini-code-assist",
+      "provider": {
+        "id": "google",
+        "name": "Google"
+      },
+      "product": "Gemini Code Assist for VS Code",
+      "categories": [
+        "coding_assistant",
+        "ide_assistant"
+      ],
+      "surfaces": [
+        "ide"
+      ],
+      "status": "observed",
+      "sources": [
+        {
+          "id": "source-1",
+          "url": "https://marketplace.visualstudio.com/items?itemName=Google.geminicodeassist",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Google Marketplace listing identifies the extension, its coding-assistant role, and VS Code surface."
+        }
+      ],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "google.geminicodeassist",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Google Gemini Code Assist VS Code extension identifier",
+          "source_id": "source-1",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Google offers other editor/cloud surfaces; an installed extension does not prove that it was used during a session."
         }
       ],
       "relationships": []
@@ -1815,10 +2194,10 @@
           "scope": "Hosted NotebookLM application hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`notebooklm.google.com` exact app host; Google account infrastructure is shared."
         }
       ],
@@ -1861,10 +2240,10 @@
           "scope": "Documented GroqCloud API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Exact API host `api.groq.com` and base path documented."
         }
       ],
@@ -1933,10 +2312,10 @@
           "scope": "HuggingChat route on a shared Hugging Face host",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`huggingface.co` is shared with model hosting and other services; host-only match is broad."
         }
       ],
@@ -1980,10 +2359,10 @@
           "scope": "Documented Hugging Face inference router hostname on a shared platform",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "Router endpoint `router.huggingface.co` is documented; Hugging Face hosts many unrelated services."
         }
       ],
@@ -2056,10 +2435,10 @@
           "scope": "Documented Jan default local API listener",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "unsafe_to_block",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "Local server default `127.0.0.1:1337` documented; can route to configured remote providers too.",
           "bind_scope": "loopback"
         }
@@ -2156,10 +2535,10 @@
           "scope": "Documented npm package name; package identity is a weak local clue",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
           "limitations": "Same configurable provider issue; package is `@kilocode/cli`, but package identity is only a weak local clue.",
           "ecosystem": "npm"
         }
@@ -2358,9 +2737,35 @@
           "url": "https://localai.io/docs/index.html",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Bind address/port configurable; no fixed process signature is a reliable identity."
+        },
+        {
+          "id": "source-2",
+          "url": "https://localai.io/docs/index.html",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "LocalAI official quick start documents the `localai/localai` container image and its AI runtime role."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "container_image",
+          "value": "localai/localai",
+          "platforms": [
+            "linux"
+          ],
+          "surfaces": [
+            "local_runtime",
+            "server"
+          ],
+          "scope": "LocalAI Docker Hub image repository",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Image use can be mirrored or retagged; a manifest or local image does not prove that a container is running or being used."
+        }
+      ],
       "relationships": []
     },
     {
@@ -2428,10 +2833,10 @@
           "scope": "Hosted Meta AI product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`meta.ai` exact host; AI features embedded in other Meta apps are separate."
         }
       ],
@@ -2504,10 +2909,10 @@
           "scope": "Hosted Microsoft Copilot product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`copilot.microsoft.com` exact host; Copilot is also embedded across Microsoft products."
         }
       ],
@@ -2605,10 +3010,10 @@
           "scope": "Hosted Midjourney product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`midjourney.com` product surface; third-party clients are not covered."
         }
       ],
@@ -2658,10 +3063,10 @@
           "scope": "Hosted MiniMax Agent web product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`agent.minimax.io` is a current web product host; `chat.minimax.io` redirects to a regional MiniMax Agent host. API and enterprise endpoints are separate."
         }
       ],
@@ -2705,10 +3110,10 @@
           "scope": "Documented MiniMax API host; the cited API bases include /anthropic and /v1",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "The current docs describe API bases `api.minimax.io/anthropic` and `api.minimax.io/v1`; account, region, and compatible gateways can still change the route."
         }
       ],
@@ -2808,10 +3213,10 @@
           "scope": "Documented Mistral API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Exact host `api.mistral.ai` documented in quickstart."
         }
       ],
@@ -2861,10 +3266,10 @@
           "scope": "Hosted Mistral Vibe Chat/Work product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`chat.mistral.ai` is the product host; this does not identify Vibe Code, API use, or user intent."
         }
       ],
@@ -2894,9 +3299,59 @@
           "url": "https://docs.mistral.ai/vibe/code/overview",
           "checked_on": "2026-10-19",
           "indicator_assessment": "First-party docs identify CLI, IDE integrations, and web agent surfaces; no stable package/process identifier is asserted here."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/mistralai/mistral-vibe",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Mistral-maintained Vibe repository documents `uv tool install mistral-vibe` and `pip install mistral-vibe`."
+        },
+        {
+          "id": "source-3",
+          "url": "https://github.com/mistralai/mistral-vibe",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Mistral Vibe upstream documentation names `vibe` as its interactive and programmatic CLI command."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "executable_name",
+          "value": "vibe",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Documented Mistral Vibe CLI command name",
+          "source_id": "source-3",
+          "verified_on": "2026-10-19",
+          "confidence": "medium",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
+          "limitations": "The short command name is not a stable binary identity, can collide with unrelated programs, and can be renamed or wrapped."
+        },
+        {
+          "kind": "package_name",
+          "value": "mistral-vibe",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Mistral Vibe PyPI distribution",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Package presence does not prove use; source builds, alternate command environments, and configured model endpoints are not represented.",
+          "ecosystem": "pypi"
+        }
+      ],
       "relationships": []
     },
     {
@@ -2965,10 +3420,10 @@
           "scope": "Hosted Kimi product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`kimi.com` exact host for the product; regional and API surfaces may differ."
         }
       ],
@@ -2996,10 +3451,112 @@
           "url": "https://platform.moonshot.cn/docs",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Provider-specific regional endpoints; use current first-party endpoint table, not a guessed single host."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/MoonshotAI/kimi-code/blob/main/docs/en/configuration/providers.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Moonshot-maintained Kimi Code provider documentation lists `https://api.moonshot.ai/v1` as the Kimi provider base URL."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "api_hostname",
+          "value": "api.moonshot.ai",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "api"
+          ],
+          "scope": "Current documented Kimi OpenAI-compatible API hostname",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
+          "limitations": "A provider host can receive multiple API operations and compatible clients; contacting it does not identify the model, caller intent, or user-visible product."
+        }
+      ],
       "relationships": []
+    },
+    {
+      "id": "moonshot-ai-kimi-code-cli",
+      "provider": {
+        "id": "moonshot-ai",
+        "name": "Moonshot AI"
+      },
+      "product": "Kimi Code CLI",
+      "categories": [
+        "cli_agent",
+        "coding_assistant",
+        "router"
+      ],
+      "surfaces": [
+        "cli"
+      ],
+      "status": "observed",
+      "sources": [
+        {
+          "id": "source-1",
+          "url": "https://github.com/MoonshotAI/kimi-code/blob/main/apps/kimi-code/README.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Moonshot-maintained repository documents the npm package and global installation command for Kimi Code CLI."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/MoonshotAI/kimi-code/blob/main/apps/kimi-code/README.md",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Kimi Code CLI upstream quick start documents `kimi --version` and launching the `kimi` command."
+        }
+      ],
+      "indicators": [
+        {
+          "kind": "executable_name",
+          "value": "kimi",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Documented Kimi Code CLI command name",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "medium",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
+          "limitations": "A short command can collide with unrelated tools and is mutable; it does not prove the command is running an AI request."
+        },
+        {
+          "kind": "package_name",
+          "value": "@moonshot-ai/kimi-code",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Official Kimi Code CLI npm package",
+          "source_id": "source-1",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Package presence does not prove invocation; official standalone distribution and configurable third-party providers are also supported.",
+          "ecosystem": "npm"
+        }
+      ],
+      "relationships": [
+        {
+          "kind": "integrates_with",
+          "target_id": "moonshot-ai-kimi-api",
+          "notes": "The CLI documents the Kimi provider and also supports compatible provider configurations."
+        }
+      ]
     },
     {
       "id": "mozilla-llamafile",
@@ -3094,10 +3651,10 @@
           "scope": "Documented Novita API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.novita.ai` documented; product endpoints are versioned and task-specific."
         }
       ],
@@ -3209,9 +3766,33 @@
           "url": "https://github.com/ollama/ollama/blob/main/docs/api/introduction.mdx",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Default `localhost:11434` documented; configurable; detection candidate only."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/ollama/ollama/blob/main/docs/cli.mdx",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Ollama CLI reference documents the `ollama serve` and `ollama run` commands."
         }
       ],
       "indicators": [
+        {
+          "kind": "executable_name",
+          "value": "ollama",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "local_runtime"
+          ],
+          "scope": "Ollama CLI executable/command name",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "Executable names can be renamed, wrapped, or replaced; running Ollama does not prove model use or session activity."
+        },
         {
           "kind": "local_port",
           "value": "11434",
@@ -3224,10 +3805,10 @@
           "scope": "Documented Ollama default local API listener",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "unsafe_to_block",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "Default `localhost:11434` documented; configurable; detection candidate only.",
           "bind_scope": "loopback"
         }
@@ -3286,9 +3867,35 @@
           "url": "https://docs.openwebui.com/getting-started/quick-start/",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Container publish port can differ from app port; configurable provider connections."
+        },
+        {
+          "id": "source-2",
+          "url": "https://docs.openwebui.com/getting-started/quick-start/",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Open WebUI official quick start documents the GHCR image and describes a self-hosted interface with configurable model/provider connections."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "container_image",
+          "value": "ghcr.io/open-webui/open-webui",
+          "platforms": [
+            "linux"
+          ],
+          "surfaces": [
+            "local_web_ui",
+            "server"
+          ],
+          "scope": "Open WebUI GHCR image repository",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Open WebUI can connect to different local or remote providers; the image identifies software distribution, not the selected model or activity."
+        }
+      ],
       "relationships": []
     },
     {
@@ -3328,10 +3935,10 @@
           "scope": "Documented OpenAI API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Exact API host `api.openai.com` documented; host does not identify operation/model."
         }
       ],
@@ -3374,10 +3981,10 @@
           "scope": "Hosted ChatGPT web product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`chatgpt.com` exact host; identifies service surface, not user intent."
         }
       ],
@@ -3404,9 +4011,35 @@
           "url": "https://github.com/openai/codex",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Official source confirms CLI; process name is bypassable and provider endpoints are shared."
+        },
+        {
+          "id": "source-2",
+          "url": "https://github.com/openai/codex/blob/main/codex-cli/scripts/build_npm_package.py",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "OpenAI-maintained packaging script and repository install documentation identify the npm distribution name."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "package_name",
+          "value": "@openai/codex",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "cli"
+          ],
+          "scope": "Official Codex CLI npm package",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "detection_candidate",
+          "false_positive_risk": "low",
+          "lifecycle": "current",
+          "limitations": "Package identity indicates distribution, not invocation; custom builds, alternate install channels, and remote execution are outside this value.",
+          "ecosystem": "npm"
+        }
+      ],
       "relationships": []
     },
     {
@@ -3477,10 +4110,10 @@
           "scope": "Hosted OpenRouter model gateway hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`openrouter.ai` exact host; shared gateway path can route to many underlying providers."
         }
       ],
@@ -3580,10 +4213,10 @@
           "scope": "Hosted Perplexity consumer product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`perplexity.ai` exact host for the consumer product; Comet is separate below."
         }
       ],
@@ -3656,10 +4289,10 @@
           "scope": "Hosted Poe product hostname; bots can route to different providers",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`poe.com` exact host; bots may route to different underlying providers."
         }
       ],
@@ -3758,10 +4391,10 @@
           "scope": "Documented Replicate API hostname for multiple model/task types",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`api.replicate.com` documented; API is general-purpose and supports many models/tasks."
         }
       ],
@@ -3811,16 +4444,41 @@
         "browser_extension",
         "ide"
       ],
-      "status": "observed",
+      "status": "archived",
       "sources": [
         {
           "id": "source-1",
           "url": "https://docs.roocode.com/getting-started/connecting-api-provider",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Supports multiple API providers and Roo Router; no fixed model host."
+        },
+        {
+          "id": "source-2",
+          "url": "https://marketplace.visualstudio.com/items?itemName=rooveterinaryinc.roo-cline",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Marketplace listing states the Roo Code extension shut down on 15 May; the notice omits the year. Retain this identifier as historical provenance, not a current installation recommendation."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "vscode_extension_id",
+          "value": "rooveterinaryinc.roo-cline",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "ide"
+          ],
+          "scope": "Archived Roo Code VS Code Marketplace extension identifier",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "research_only",
+          "false_positive_risk": "low",
+          "lifecycle": "archived",
+          "limitations": "The Marketplace notice states the extension shut down on 15 May but omits the year; the identifier is retained as historical provenance, not a current supported product surface."
+        }
+      ],
       "relationships": []
     },
     {
@@ -3859,10 +4517,10 @@
           "scope": "Hosted Runway product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`runwayml.com` product host; exact service host(s) can change."
         }
       ],
@@ -3905,10 +4563,10 @@
           "scope": "Documented SambaNova cloud API hostname; self-hosted URLs vary",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.sambanova.ai` documented for cloud; self-hosted SambaStack URL is operator-defined."
         }
       ],
@@ -3950,10 +4608,10 @@
           "scope": "Scite AI Assistant route on a broader research and citation platform",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`scite.ai/assistant` is the product surface; the broader domain also serves search and citation tools, so a domain match does not establish assistant use."
         }
       ],
@@ -4025,10 +4683,10 @@
           "scope": "Documented SiliconFlow regional API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Regional hosts `api.siliconflow.cn` / `api.ap.siliconflow.com`; exact region matters."
         },
         {
@@ -4043,10 +4701,10 @@
           "scope": "Documented SiliconFlow regional API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "Regional hosts `api.siliconflow.cn` / `api.ap.siliconflow.com`; exact region matters."
         }
       ],
@@ -4144,10 +4802,10 @@
           "scope": "Hosted Suno product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`suno.com` product host; identifies the service, not whether a session-relevant feature was used."
         }
       ],
@@ -4220,10 +4878,10 @@
           "scope": "Hosted Tencent Yuanbao product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`yuanbao.tencent.com` product host; Tencent Cloud APIs are a separate surface."
         }
       ],
@@ -4351,10 +5009,10 @@
           "scope": "Hosted Venice product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`venice.ai` exact host; product documentation describes model choice and agent routing."
         }
       ],
@@ -4410,9 +5068,60 @@
           "url": "https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/",
           "checked_on": "2026-10-19",
           "indicator_assessment": "Deployment port and host are operator-defined; no static default used here."
+        },
+        {
+          "id": "source-2",
+          "url": "https://docs.vllm.ai/en/latest/cli/index.html",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "vLLM CLI documentation describes the vllm command and its distribution."
+        },
+        {
+          "id": "source-3",
+          "url": "https://docs.vllm.ai/en/latest/cli/index.html",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "vLLM CLI documentation names `vllm` and documents `vllm serve` for the OpenAI-compatible server."
         }
       ],
-      "indicators": [],
+      "indicators": [
+        {
+          "kind": "executable_name",
+          "value": "vllm",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "server"
+          ],
+          "scope": "vLLM command-line executable name",
+          "source_id": "source-3",
+          "verified_on": "2026-10-19",
+          "confidence": "medium",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "Executable names can be renamed or wrapped; the command does not identify the model or prove a live inference request."
+        },
+        {
+          "kind": "package_name",
+          "value": "vllm",
+          "platforms": [
+            "unknown"
+          ],
+          "surfaces": [
+            "local_runtime",
+            "server"
+          ],
+          "scope": "vLLM Python distribution name",
+          "source_id": "source-2",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "Package installation does not prove the server is running; builds, environments, containers, and remote deployments vary.",
+          "ecosystem": "pypi"
+        }
+      ],
       "relationships": []
     },
     {
@@ -4452,10 +5161,10 @@
           "scope": "Documented xAI API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.x.ai` is documented; endpoint is not exclusive to a product feature."
         }
       ],
@@ -4499,10 +5208,10 @@
           "scope": "Hosted Grok consumer product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`grok.com` exact host for this consumer surface; API is separate."
         }
       ],
@@ -4570,10 +5279,10 @@
           "scope": "You.com search and AI product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "high",
+          "lifecycle": "current",
           "limitations": "`you.com` exact host; multiple search and agent features share the domain."
         }
       ],
@@ -4616,10 +5325,10 @@
           "scope": "Hosted Z.ai Chat product hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`chat.z.ai` product host; no claim that it identifies all Z.ai API use."
         }
       ],
@@ -4662,10 +5371,10 @@
           "scope": "Documented Z.ai GLM API hostname",
           "source_id": "source-1",
           "verified_on": "2026-10-19",
-          "confidence": "low",
-          "actionability": "research_only",
-          "false_positive_risk": "unknown",
-          "lifecycle": "unknown",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
           "limitations": "`api.z.ai` documented in API references; compatibility routes can vary."
         }
       ],

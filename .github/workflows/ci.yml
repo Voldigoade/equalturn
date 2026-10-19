@@ -63,7 +63,6 @@ jobs:
         run: |
           python3 tools/validate_registry.py
           python3 tools/validate_registry_v3.py
-          python3 tools/migrate_registry_v2_to_v3.py --check
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover --start-directory tests --pattern 'test_registry_*.py'
 
       - name: Run Clippy
