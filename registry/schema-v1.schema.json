@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:equalturn:registry:schema:v1",
+  "title": "Equalturn AI ecosystem registry v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "registry_version", "last_updated", "entries"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "registry_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "last_updated": { "type": "string", "format": "date" },
+    "entries": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/entry" },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "checked_on"],
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "checked_on": { "type": "string", "format": "date" }
+      }
+    },
+    "indicator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "value", "confidence", "actionability", "source", "false_positive_notes"],
+      "properties": {
+        "kind": { "enum": ["domain_exact", "domain_suffix", "ip_exact", "ip_cidr", "package_id", "bundle_id", "process_name", "executable_name", "tcp_port", "udp_port"] },
+        "value": { "type": "string", "minLength": 1 },
+        "confidence": { "enum": ["high", "medium", "low"] },
+        "actionability": { "enum": ["block_candidate", "detection_candidate", "context_only"] },
+        "source": { "$ref": "#/$defs/source" },
+        "false_positive_notes": { "type": "string", "minLength": 1 }
+      }
+    },
+    "relationship": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "target_id", "notes"],
+      "properties": {
+        "kind": { "enum": ["routes_to", "provided_by", "integrates_with"] },
+        "target_id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "notes": { "type": "string" }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "provider", "product", "categories", "surfaces", "status", "sources", "indicators", "relationships", "notes"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+        "provider": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "name"],
+          "properties": {
+            "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+            "name": { "type": "string", "minLength": 1 },
+            "aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }
+          }
+        },
+        "product": { "type": "string", "minLength": 1 },
+        "product_aliases": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "categories": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["hosted_chat", "provider_api", "gateway", "coding_assistant", "ide_assistant", "browser_extension", "desktop_app", "cli_agent", "security_tool", "local_runner", "inference_server", "local_web_ui", "self_hosted_stack", "cloud_marketplace", "multimodal", "search_research", "regional_provider", "router"] }
+        },
+        "surfaces": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["web", "api", "desktop", "ide", "browser_extension", "cli", "local_runtime", "server", "local_web_ui", "cloud"] }
+        },
+        "status": { "enum": ["active", "deprecated", "disputed"] },
+        "sources": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/source" } },
+        "indicators": { "type": "array", "items": { "$ref": "#/$defs/indicator" } },
+        "relationships": { "type": "array", "items": { "$ref": "#/$defs/relationship" } },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

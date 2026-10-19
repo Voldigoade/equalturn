@@ -1,0 +1,21 @@
+# Rust build output
+/target/
+
+# Native build output
+/build/
+/dist/
+
+# Local editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
