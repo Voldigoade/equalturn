@@ -29,7 +29,7 @@ For a disposable staging repository used only to exercise tooling, a **1-of-1 te
 ## Endpoints and bootstrap
 
 - Intended production repository base URL: `https://voldigoade.github.io/equalturn-registry/`. It is currently uninitialized and must not be treated as a source of trust.
-- Staging repository: a distinct repository and root, if created, at `https://voldigoade.github.io/equalturn-registry-staging/`. Staging is for non-production protocol smoke tests only.
+- Staging repository: `Voldigoade/equalturn-registry-staging` at `https://voldigoade.github.io/equalturn-registry-staging/`. The repository exists, but its TUF root and target are not initialized yet. Staging is for non-production protocol smoke tests only.
 - The initial production `root.json` and its SHA-256 digest must be embedded in an Equalturn release or provisioned through another authenticated, out-of-band release channel. A client must never download an initial root and accept its own signature from the same untrusted endpoint.
 - The bootstrap release must disclose the root version, fingerprint/hash, repository URL, and date. Reviewers must verify the exact root bytes from the local signer ceremony against the copy used by the release. A GitHub-hosted checksum alone is not an independent channel if GitHub is the suspected compromise.
 - Staging roots and test signer keys must never be compiled into production trust, accepted by a production profile, copied to the production repository, or reused for production roles.

@@ -47,7 +47,7 @@
 - [x] Verify current TUF spec, TUF-on-CI release/workflows, `sigstore-tuf` API/features/limits, and GitHub Pages setup against upstream sources.
 - [x] Update trust design where current upstream behavior differs from Milestone 1.5 assumptions.
 - [x] Run baseline registry validation and workspace verification again before implementation.
-- [ ] Commit and push the research/status checkpoint; inspect CI if CI files changed.
+- [x] Commit and push the research/status checkpoint; inspect CI if CI files changed. (commit `3b122d2`, pushed; no CI trigger for documentation-only branch push.)
 
 ### Task 2: Production trust policy and manual ceremony gate
 
@@ -64,7 +64,7 @@
 - [x] Choose separate staging-only signers and document online signer options and risks without provisioning paid infrastructure.
 - [x] Specify production publication URL, initial-root out-of-band verification, role expiry/rotation, incident response, and the exact manual signer gate.
 - [x] Verify no instruction or artifact includes private production material; review policy against the Mission's root-custody boundary.
-- [ ] Commit and push the policy checkpoint.
+- [x] Commit and push the policy checkpoint. (commit `3e775b5`, pushed.)
 
 ### Task 3: Isolated staging TUF repository
 
@@ -77,10 +77,10 @@
 - Consumes: Task 2 role and staging policy.
 - Produces: an isolated non-production publication origin, pinned workflow revisions, Pages `github-pages` environment restricted to `publish`, and inspectable repository settings.
 
-- [ ] Create the staging repository from the current TUF-on-CI template; retain clear NON-PRODUCTION labeling.
-- [ ] Configure Pages, environment branch policy, Actions token defaults, workflow permissions, and pinned actions according to current upstream guidance and least privilege.
-- [ ] Record settings that cannot be inspected through authorized GitHub tooling; do not add a long-lived PAT or production secret.
-- [ ] Commit/push any repository-side workflow/docs adjustment and inspect the actual workflow result.
+- [x] Create the staging repository from the current TUF-on-CI template; retain clear NON-PRODUCTION labeling.
+- [x] Configure Pages, environment branch policy, Actions token defaults, workflow permissions, and pinned actions according to current upstream guidance and least privilege.
+- [x] Record settings that cannot be inspected through authorized GitHub tooling; do not add a long-lived PAT or production secret.
+- [x] Commit/push the README-only staging adjustment (`a7d062d`). It matches no workflow trigger, so no workflow run occurred; initialization/publication remains Task 4.
 
 ### Task 4: Staging root ceremony and first target
 
