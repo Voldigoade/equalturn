@@ -9,7 +9,7 @@ mod relay;
 mod wire;
 
 pub use chain::{ChainValidation, validate_event_chain, validate_event_chain_to_head};
-pub use crypto::{Hash32, PublicKey, SignatureBytes, SigningIdentity, fingerprint};
+pub use crypto::{Hash32, PublicKey, SignatureBytes, SigningIdentity, SigningSeed, fingerprint};
 pub use errors::{HexError, ProtocolError, Result};
 pub use event::{
     EndReason, EventBody, EventPayload, MAX_EVENT_BYTES, MAX_EVENT_PAYLOAD_BYTES,

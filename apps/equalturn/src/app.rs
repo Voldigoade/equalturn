@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use crate::{
     cli::{Cli, Command, ReportCommand},
-    commands::{event, report, session},
+    commands::{event, registry, report, session},
 };
 
 pub struct Context {
@@ -52,16 +52,19 @@ impl Context {
 
 pub async fn execute(cli: Cli) -> Result<(), AppError> {
     init_logging(cli.options.verbose)?;
+    let options = cli.options;
     match cli.command {
+        Command::Registry { command } => registry::run(&options, command).await,
         Command::Report {
             command: ReportCommand::Verify { report, relay_key },
         } => report::verify(&report, relay_key.as_deref()),
         command => {
-            let context = Context::open(&cli.options).await?;
+            let context = Context::open(&options).await?;
             match command {
                 Command::Session { command } => session::run(&context, command).await,
                 Command::Event { command } => event::run(&context, command).await,
                 Command::Report { command } => report::run(&context, command).await,
+                Command::Registry { command } => registry::run(&options, command).await,
             }
         }
     }
@@ -154,7 +157,7 @@ pub fn unix_time_ms() -> Result<u64, AppError> {
         .map_err(|_| AppError::Message("system clock value is out of range".into()))
 }
 
-fn data_directory(options: &crate::cli::Options) -> Result<PathBuf, AppError> {
+pub(crate) fn data_directory(options: &crate::cli::Options) -> Result<PathBuf, AppError> {
     if let Some(path) = &options.data_dir {
         return Ok(path.clone());
     }

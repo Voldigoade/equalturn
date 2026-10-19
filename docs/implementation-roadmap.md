@@ -1,6 +1,6 @@
 # Implementation roadmap
 
-Each milestone has a written scope, acceptance criteria, and platform-specific verification. **Milestone 1 is implemented and locally verified.** Later OS enforcement milestones remain future work. OS enforcement milestones below remain future work.
+Each milestone has a written scope, acceptance criteria, and platform-specific verification. **Milestones 1 and 1.5 are implemented on this branch and have passed Linux/PostgreSQL and Windows CI.** Endpoint enforcement remains future work.
 
 ## 0. Research and architecture — completed
 
@@ -12,9 +12,15 @@ The implementation now contains a Rust CLI client, Rust relay, versioned signed 
 
 **Verified:** A and B completed the relay flow; 49 tests pass, including two PostgreSQL-backed relay integration scenarios and adversarial report/protocol cases. Formatting, registry validation, Clippy with warnings denied, workspace build, and dependency audit pass. The synthetic event reached the peer; offline queue/reconnect, end-of-session export, and independent verification worked. A liveness gap remains unknown rather than a clean result; peer IPs are absent from participant-visible/report data; the client does not enforce controls. Linux/PostgreSQL and Windows CI passed in [run 39270515978](https://github.com/Voldigoade/equalturn/actions/runs/39270515978). That run verified the SQLite shutdown fix in commit `89a2f1296783128654caab2e9ca1b7059f81efc9`.
 
-## 2. Registry validation and advisory local signals
+## 1.5 Security hardening and trusted registry plumbing — implemented
 
-Add a schema validator, signed/versioned registry packaging, local process-signature observations, and destination-only DNS/network observations behind a diagnostic profile. Measure false-positive and source freshness behavior. Keep advisory and blocked states distinct.
+Participant keys use current-user DPAPI on Windows and owner-only descriptor-relative storage on Unix; relay key persistence and secret lifecycles were hardened and documented. The v3 research registry has schema/semantic validation and deterministic target generation. `equalturn registry verify|inspect|search` verifies a local TUF repository with a caller-supplied root and independent digest. Adversarial tests exercise TUF attacks, bounds, paths, symlinks, malformed data, and terminal-control rejection. No production Equalturn root or signed registry release exists; there is no remote updater and no registry-to-enforcement connection.
+
+**Verified:** branch CI run [39308964800](https://github.com/Voldigoade/equalturn/actions/runs/39308964800) passed Linux/PostgreSQL and Windows. Linux ran cargo audit, v2/v3 registry validation, deterministic target generation/comparison, Clippy, and workspace tests; Windows ran the full workspace suite including DPAPI persistence/corruption tests. The active development host was not subjected to enforcement. Future tests must follow the [enforcement test safety policy](enforcement-test-safety.md).
+
+## 2. Observe-only local signals
+
+After a production root ceremony and signed release exist, evaluate whether verified registry candidates can inform local process-signature or destination-only observations behind an explicit diagnostic profile. Measure false-positive and source-freshness behavior. Keep advisory and blocked states distinct. Do not enable automatic policy or silently install a registry update.
 
 **Exit:** registry entries include source, freshness, confidence, scope, and false-positive notes; unknown destinations are not silently classified as non-AI.
 
@@ -48,7 +54,7 @@ Set support matrix, session server operating model, rate limits, retention enfor
 
 ## Current implementation boundary
 
-Milestone 1 is complete: a non-enforcing, two-client session event path and useful export are verified. This tests protocol, reconnects, pseudonymous identity, relay privacy, authenticated ordering, and report usefulness before privileged firewall code or UI obscures those questions. Keep OS enforcement, process blocking, auto-updates, registry automation, and browser-history telemetry out of that first slice.
+Milestones 1 and 1.5 are implemented: the non-enforcing session evidence path and its hardening, plus explicit local registry trust plumbing, are verified. Keep OS enforcement, process blocking, background registry updates, registry-driven policy, and browser-history telemetry out of this implementation boundary. Future enforcement must use isolated disposable environments; see [enforcement-test-safety.md](enforcement-test-safety.md).
 
 ## Ranked unresolved risks
 
@@ -57,5 +63,5 @@ Milestone 1 is complete: a non-enforcing, two-client session event path and usef
 3. **Relay privacy and equivocation:** the relay sees source IPs and connection timing, and can omit/fork events or deny service. Signed events and checkpoint comparison reduce silent editing but do not remove operator trust.
 4. **OS behavior and recovery:** WFP/firewall coexistence, DNS/DoH, WSL, nftables, systemd, containers, sleep, upgrades, and uninstall recovery need real Windows/Linux VM probes before selecting a v1 support matrix.
 5. **Evidence semantics:** signed reports authenticate a key’s claim, not the completeness of a compromised endpoint sensor. Competition rules need a fair way to interpret unknown states and outages without automatic cheating verdicts.
-6. **Registry and update trust:** a signed but stale or compromised registry can block legitimate work or miss new surfaces; key rotation, expiry policy, review ownership, and offline recovery are not yet defined.
+6. **Registry and update trust:** proposed key roles and expirations are documented, but the production root ceremony and publication setup have not occurred. Until then, no public trusted registry release exists. A malicious but correctly signed registry can still be factually wrong; TUF does not replace independent indicator review.
 7. **Retention and operator obligations:** relay cleanup now removes abandoned/ended session rows on a defined schedule, but backup expiry, hosting logs, abuse response, and participant deletion rights need an operating model before public hosting.

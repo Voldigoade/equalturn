@@ -85,10 +85,7 @@ async fn serve(args: ServeArgs) -> Result<(), &'static str> {
     let identity = load_or_create_relay_identity(&args.identity_file)
         .map_err(|_| "could not load or create the relay signing identity")?;
     let relay = Relay::connect(
-        &RelayConfig {
-            database_url,
-            max_connections: args.max_connections,
-        },
+        &RelayConfig::new(database_url, args.max_connections),
         identity,
     )
     .await

@@ -9,6 +9,7 @@ description = "Local session identity, durable event queue, and relay client for
 [dependencies]
 equalturn-protocol = { path = "../protocol" }
 equalturn-report = { path = "../report" }
+bytes.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 sqlx.workspace = true
@@ -20,6 +21,12 @@ tokio-tungstenite.workspace = true
 url.workspace = true
 uuid.workspace = true
 zeroize = "1.9.1"
+
+[target.'cfg(windows)'.dependencies]
+equalturn-key-protection = { path = "../key-protection" }
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "=1.1.5", features = ["fs", "process"] }
 
 [lints]
 workspace = true

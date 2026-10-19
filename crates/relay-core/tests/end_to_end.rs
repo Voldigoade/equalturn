@@ -11,7 +11,7 @@ use equalturn_client_core::{ClientStore, RelayClient, SessionProfile, SessionStr
 use equalturn_protocol::{
     ClientWsMessage, EventBody, EventId, EventPayload, Hash32, InvitationCode, LivenessState,
     OsFamily, ParticipantEvent, ParticipantId, PublicKey, ReconnectChallenge, RelayNoticeKind,
-    ServerWsMessage, SessionId, SigningIdentity,
+    ServerWsMessage, SessionId, SigningIdentity, SigningSeed,
 };
 use equalturn_relay_core::{Relay, router};
 use equalturn_report::{VerificationStatus, verify_report_json_with_relay_key};
@@ -135,8 +135,8 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
             .await
             .expect("duplicate-nickname client store opens"),
     ];
-    let relay_seed = [91; 32];
-    let relay_identity = SigningIdentity::from_seed(relay_seed);
+    let relay_seed = SigningSeed::from_bytes([91; 32]);
+    let relay_identity = SigningIdentity::from_seed(&relay_seed);
     let relay_public_key = relay_identity.public_key();
     let application_pool = database.application_pool().await;
     let relay = Relay::with_pool(application_pool.clone(), relay_identity)
@@ -172,7 +172,7 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
     );
     assert!(matches!(
         client.resolve_invitation("not-an-invitation").await,
-        Err(RelayClientError::Rejected { status: 401, .. })
+        Err(RelayClientError::InvalidInvitation)
     ));
 
     let session_id = SessionId::try_new_v4().expect("session ID is generated");
@@ -206,7 +206,7 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
         .create_session(
             &equalturn_protocol::CreateSessionRequest {
                 protocol_version: 1,
-                invitation_code: invitation.as_str().to_owned(),
+                invitation_code: copied_invitation(&invitation),
                 creator_event: alice_join.clone(),
             },
             &relay_public_key,
@@ -270,7 +270,7 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
         .join_session(
             &equalturn_protocol::JoinSessionRequest {
                 protocol_version: 1,
-                invitation_code: invitation.as_str().to_owned(),
+                invitation_code: copied_invitation(&invitation),
                 join_event: duplicate_nickname_event,
             },
             &relay_public_key,
@@ -315,7 +315,7 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
         .join_session(
             &equalturn_protocol::JoinSessionRequest {
                 protocol_version: 1,
-                invitation_code: invitation.as_str().to_owned(),
+                invitation_code: copied_invitation(&invitation),
                 join_event: bob_join,
             },
             &relay_public_key,
@@ -646,7 +646,7 @@ async fn clients_create_join_exchange_events_recover_and_verify_report() {
     let restarted_pool = database.application_pool().await;
     let restarted_relay = Relay::with_pool(
         restarted_pool.clone(),
-        SigningIdentity::from_seed(relay_seed),
+        SigningIdentity::from_seed(&relay_seed),
     )
     .await
     .expect("relay restart reconciles persisted liveness");
@@ -843,8 +843,8 @@ async fn relay_restart_and_terminal_capacity_remain_available_at_limits() {
             .await
             .expect("joining participant store opens"),
     ];
-    let relay_seed = [94; 32];
-    let relay_identity = SigningIdentity::from_seed(relay_seed);
+    let relay_seed = SigningSeed::from_bytes([94; 32]);
+    let relay_identity = SigningIdentity::from_seed(&relay_seed);
     let relay_key = relay_identity.public_key();
     let application_pool = database.application_pool().await;
     let relay = Relay::with_pool(application_pool.clone(), relay_identity)
@@ -884,7 +884,7 @@ async fn relay_restart_and_terminal_capacity_remain_available_at_limits() {
         .create_session(
             &equalturn_protocol::CreateSessionRequest {
                 protocol_version: 1,
-                invitation_code: invitation.as_str().to_owned(),
+                invitation_code: copied_invitation(&invitation),
                 creator_event: creator_join,
             },
             &relay_key,
@@ -925,7 +925,7 @@ async fn relay_restart_and_terminal_capacity_remain_available_at_limits() {
         .join_session(
             &equalturn_protocol::JoinSessionRequest {
                 protocol_version: 1,
-                invitation_code: invitation.as_str().to_owned(),
+                invitation_code: copied_invitation(&invitation),
                 join_event: participant_join,
             },
             &relay_key,
@@ -980,7 +980,7 @@ async fn relay_restart_and_terminal_capacity_remain_available_at_limits() {
     let recovered_pool = database.application_pool().await;
     let recovered_relay = Relay::with_pool(
         recovered_pool.clone(),
-        SigningIdentity::from_seed(relay_seed),
+        SigningIdentity::from_seed(&relay_seed),
     )
     .await
     .expect("relay restart records all liveness transitions within reserved capacity");
@@ -1302,4 +1302,8 @@ fn contains_address_field(value: &Value) -> bool {
         Value::Array(values) => values.iter().any(contains_address_field),
         _ => false,
     }
+}
+
+fn copied_invitation(invitation: &InvitationCode) -> InvitationCode {
+    InvitationCode::parse(invitation.as_str()).expect("generated invitation remains valid")
 }

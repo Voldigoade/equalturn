@@ -1,4 +1,8 @@
-use std::{fs, fs::OpenOptions, io::Write, path::Path};
+use std::{
+    fs::{File, OpenOptions},
+    io::{self, Read, Write},
+    path::Path,
+};
 
 use equalturn_client_core::SessionProfile;
 use equalturn_protocol::PublicKey;
@@ -138,11 +142,17 @@ async fn add_pending_local_events(
 }
 
 pub fn verify(path: &Path, relay_key_hex: Option<&str>) -> Result<(), AppError> {
-    let metadata = fs::metadata(path)?;
-    if metadata.len() > u64::try_from(MAX_REPORT_JSON_BYTES).unwrap_or(u64::MAX) {
+    let file = File::open(path)?;
+    if file.metadata()?.len() > u64::try_from(MAX_REPORT_JSON_BYTES).unwrap_or(u64::MAX) {
         return Err(AppError::Message("report exceeds the 64 MiB limit".into()));
     }
-    let bytes = fs::read(path)?;
+    let bytes = read_bounded(file, MAX_REPORT_JSON_BYTES).map_err(|error| {
+        if error.kind() == io::ErrorKind::InvalidData {
+            AppError::Message("report exceeds the 64 MiB limit".into())
+        } else {
+            AppError::Io(error)
+        }
+    })?;
     let json = std::str::from_utf8(&bytes)
         .map_err(|_| AppError::Message("report JSON is not UTF-8".into()))?;
     let result = if let Some(encoded_key) = relay_key_hex {
@@ -173,4 +183,42 @@ fn write_new(path: &Path, bytes: &[u8]) -> Result<(), AppError> {
     file.write_all(bytes)?;
     file.sync_all()?;
     Ok(())
+}
+
+fn read_bounded<R: Read>(reader: R, maximum_bytes: usize) -> io::Result<Vec<u8>> {
+    let read_limit = maximum_bytes
+        .checked_add(1)
+        .and_then(|limit| u64::try_from(limit).ok())
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "invalid byte limit"))?;
+    let mut bytes = Vec::new();
+    reader.take(read_limit).read_to_end(&mut bytes)?;
+    if bytes.len() > maximum_bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "input exceeds configured byte limit",
+        ));
+    }
+    Ok(bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use super::read_bounded;
+
+    #[test]
+    fn bounded_reader_rejects_input_that_grows_past_the_limit() {
+        let error = read_bounded(Cursor::new(b"12345"), 4)
+            .expect_err("reader stops after the configured bound");
+
+        assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[test]
+    fn bounded_reader_accepts_input_at_the_limit() {
+        let bytes = read_bounded(Cursor::new(b"1234"), 4).expect("input is within the bound");
+
+        assert_eq!(bytes, b"1234");
+    }
 }

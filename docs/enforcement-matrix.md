@@ -2,6 +2,8 @@
 
 **Status:** feasibility assessment, not measured product performance. Current-source review: 19 October 2026. Reliability labels are qualitative design estimates, not benchmarks.
 
+No technique in this matrix is implemented by the current application. Any future enforcement test must follow [the isolated-environment safety policy](enforcement-test-safety.md); never apply experimental rules to the active development host.
+
 ## Reading the capability labels
 
 - **BLOCKABLE** — a known target or action can be denied while the selected OS control and policy remain active.

@@ -1,6 +1,6 @@
 # Privacy and reporting model
 
-**Status:** Milestone 1's data model and collection boundaries are implemented in the client, relay, and report verifier. The telemetry modes below are future design options; none is selectable or implemented. The implementation collects no workstation activity telemetry. Verification results and deferred work are recorded in [implementation-roadmap.md](implementation-roadmap.md).
+**Status:** Milestones 1 and 1.5 implement the session data model, collection boundaries, key storage, reports, and local registry verification. The telemetry modes below are future design options; none is selectable or implemented. The implementation collects no workstation activity telemetry. Verification results and deferred work are recorded in [implementation-roadmap.md](implementation-roadmap.md).
 
 ## Milestone 1 collection
 
@@ -13,19 +13,19 @@ The client currently collects or creates only the data needed to join and verify
 
 The report JSON contains protocol and report-schema versions, session ID, participant IDs/nicknames/public keys/fingerprints, participant-reported client and coarse OS metadata, participant events, relay receipts/notices, relay identity, final manifest when available, and local-only unreceipted events. Verification status is computed from the included evidence. Participant timestamps are untrusted; relay receive times/order are relay claims.
 
-This milestone does not observe protection state, application/process launches, network requests, browser/IDE activity, or workstation integrity. It does not consume the AI registry. There is no tray UI, enforcement service, privacy-mode selector, or hidden telemetry collector.
+No current component observes protection state, application/process launches, network requests, browser/IDE activity, or workstation integrity. The separate registry CLI reads only a caller-selected local TUF repository after verification; neither session operation nor relay behavior uses registry indicators as policy. There is no tray UI, enforcement service, privacy-mode selector, or hidden telemetry collector.
 
 ## Deliberately not collected
 
 The client, relay evidence model, and report format do not collect or include:
 
 - Keystrokes, clipboard contents, prompts, chat messages, source code, screenshots, screen recordings, microphone/webcam data, or request/response bodies.
-- Passwords, access tokens, cookies, environment variables, or command-line arguments.
+- Passwords, access tokens, cookies, or unrelated environment values. Required configuration such as the relay URL and relay database URL is read for operation and is not put into session evidence or application logs.
 - Browsing history, page titles, full URLs, query strings, DNS history, or unrelated network logs.
 - Real name, email, machine username, hostname, MAC address, hardware serial, filesystem inventory, or process/software inventory.
 - Peer network addresses in participant-visible session objects or reports.
 
-The synthetic event hostname is an explicit CLI argument, not a passively observed destination. No participant is labeled as having cheated based on an event or liveness state.
+The invitation code and synthetic event hostname are explicit CLI inputs, not passively observed activity. The CLI necessarily parses its supplied arguments, but it does not record the general argument list as telemetry. Invitation input has OS-visible command-line lifetime limitations described in [secret lifecycle](secret-lifecycle.md). No participant is labeled as having cheated based on an event or liveness state.
 
 ## Who sees what
 
@@ -33,6 +33,10 @@ The synthetic event hostname is an explicit CLI argument, not a passively observ
 - Other participants receive public keys, key fingerprints, nicknames, session-scoped participant IDs, signed events and relay evidence. They do not receive another participant's source IP from the API or report.
 - The relay operator necessarily sees source IP addresses and connection timing at the transport layer. The application evidence schema does not persist or fan out these values. Deployment reverse proxies, firewalls, cloud providers, and operational logging may record transport metadata independently; the operator must document and control those systems.
 - The relay signing private key stays in the relay's persistent identity file. It is not returned to participants; only its public key/fingerprint are sent. Session participant keys are stored locally in separate key files and are not global machine identities.
+
+The relay key file is plaintext at rest. Unix relies on owner-only directory/file permissions; Windows inherits the parent directory's DACL, which operators must restrict to the relay account and administrators. See [relay key storage](relay-key-storage.md) for creation, recovery, backup, and platform limits.
+
+Participant seed, invitation, and database credential handling is described in [secret lifecycle](secret-lifecycle.md). Current-user DPAPI does not defend against code running as the same Windows user; Unix owner-only permissions do not defend against the owner or `root`; relay keys remain plaintext at rest.
 
 The CLI reports the relay key fingerprint during create/join and saves the relay public key with the local profile. This supports checking future relay responses against the same key for that locally stored profile. A self-contained exported report proves only that its receipts/manifests verify under the included relay key; to identify the expected relay, participants must compare or pin its fingerprint through a trusted out-of-band channel.
 

@@ -1,14 +1,18 @@
+#[cfg(not(unix))]
+use std::fs::OpenOptions;
+#[cfg(windows)]
+use std::path::PathBuf;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::Duration,
 };
 
 use equalturn_protocol::{
     EventBody, EventPayload, Hash32, MAX_EVENT_BYTES, MAX_SESSION_EVENTS, PROTOCOL_VERSION,
     ParticipantEvent, ParticipantId, ProtocolError, PublicKey, RelayReceipt, SessionId,
-    SigningIdentity,
+    SigningIdentity, SigningSeed,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -20,13 +24,27 @@ use sqlx::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 const DATABASE_FILE: &str = "client.sqlite3";
 const KEY_DIRECTORY: &str = "identities";
-const KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\x01";
-const KEY_FILE_BYTES: usize = 8 + 16 + 16 + 16 + 32;
+const LEGACY_KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\x01";
+const KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\0";
+const KEY_FORMAT_VERSION: u16 = 2;
+#[cfg(unix)]
+const KEY_SCHEME_UNIX_OWNER_ONLY: u8 = 1;
+#[cfg(windows)]
+const KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER: u8 = 2;
+const KEY_HEADER_BYTES: usize = 8 + 2 + 1 + 16 + 16 + 16;
+const KEY_MAX_PAYLOAD_BYTES: usize = 16 * 1024;
+const KEY_MAX_FILE_BYTES: usize = KEY_HEADER_BYTES + KEY_MAX_PAYLOAD_BYTES;
+const LEGACY_KEY_FILE_BYTES: usize = 8 + 16 + 16 + 16 + 32;
+#[cfg(windows)]
+const DPAPI_ENTROPY_DOMAIN: &[u8] = b"Equalturn\0client-key\0v2\0";
 const SCHEMA_VERSION: i64 = 1;
+
+#[cfg(not(any(unix, windows)))]
+compile_error!("Equalturn participant key storage supports Windows and Unix targets only");
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,6 +76,8 @@ pub enum ClientError {
     LostKey,
     #[error("session signing key file is corrupt")]
     CorruptKey,
+    #[error("platform key protection failed")]
+    KeyProtection,
     #[error(
         "session key belongs to a different local database; rejoin to establish a new identity"
     )]
@@ -90,7 +110,10 @@ pub enum ClientError {
 
 pub struct ClientStore {
     pool: sqlx::SqlitePool,
+    #[cfg(windows)]
     data_dir: PathBuf,
+    #[cfg(unix)]
+    data_dir_handle: File,
     store_id: [u8; 16],
     write_gate: Mutex<()>,
 }
@@ -98,6 +121,9 @@ pub struct ClientStore {
 impl ClientStore {
     pub async fn open(data_dir: impl AsRef<Path>) -> Result<Self, ClientError> {
         let data_dir = data_dir.as_ref().to_path_buf();
+        #[cfg(unix)]
+        let data_dir_handle = prepare_data_directory(&data_dir)?;
+        #[cfg(not(unix))]
         prepare_data_directory(&data_dir)?;
         let database_path = data_dir.join(DATABASE_FILE);
         let database_exists = database_path.exists();
@@ -107,7 +133,12 @@ impl ClientStore {
                 .len()
                 == 0;
 
-        if fresh_database && has_session_keys(&data_dir.join(KEY_DIRECTORY))? {
+        #[cfg(unix)]
+        let keys_survive_database = fresh_database && has_session_keys(&data_dir_handle)?;
+        #[cfg(not(unix))]
+        let keys_survive_database =
+            fresh_database && has_session_keys(&data_dir.join(KEY_DIRECTORY))?;
+        if keys_survive_database {
             return Err(if database_exists {
                 ClientError::CorruptDatabase
             } else {
@@ -136,7 +167,10 @@ impl ClientStore {
 
         Ok(Self {
             pool,
+            #[cfg(windows)]
             data_dir,
+            #[cfg(unix)]
+            data_dir_handle,
             store_id,
             write_gate: Mutex::new(()),
         })
@@ -286,44 +320,43 @@ impl ClientStore {
             return Err(ClientError::InvalidProfile);
         }
         let identity = SigningIdentity::generate()?;
+        #[cfg(not(unix))]
         let path = self.key_path(session_id, participant_id);
+        #[cfg(unix)]
+        let key_directory = open_identity_directory(&self.data_dir_handle, true)?;
+        #[cfg(not(unix))]
         if let Some(parent) = path.parent() {
             create_private_directory(parent)?;
         }
 
-        let mut seed = identity.seed_bytes();
-        let mut bytes = Vec::with_capacity(KEY_FILE_BYTES);
-        bytes.extend_from_slice(KEY_MAGIC);
-        bytes.extend_from_slice(session_id.as_bytes());
-        bytes.extend_from_slice(participant_id.as_bytes());
-        bytes.extend_from_slice(&self.store_id);
-        bytes.extend_from_slice(&seed);
-        seed.zeroize();
+        let seed = identity.export_seed();
+        let bytes =
+            encode_key_envelope(seed.as_bytes(), session_id, participant_id, &self.store_id)?;
 
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
         #[cfg(unix)]
+        persist_new_unix_key(
+            &key_directory,
+            &identity_key_name(session_id, participant_id),
+            &bytes,
+        )?;
+        #[cfg(not(unix))]
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            let mut file = match options.open(&path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    return Err(ClientError::ProfileConflict);
+                }
+                Err(error) => {
+                    return Err(ClientError::KeyIo(error));
+                }
+            };
+            file.write_all(&bytes)
+                .and_then(|()| file.sync_all())
+                .map_err(ClientError::KeyIo)?;
+            sync_parent_directory(&path)?;
         }
-        let mut file = match options.open(&path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                bytes.zeroize();
-                return Err(ClientError::ProfileConflict);
-            }
-            Err(error) => {
-                bytes.zeroize();
-                return Err(ClientError::KeyIo(error));
-            }
-        };
-        if let Err(error) = file.write_all(&bytes).and_then(|()| file.sync_all()) {
-            bytes.zeroize();
-            return Err(ClientError::KeyIo(error));
-        }
-        bytes.zeroize();
-        sync_parent_directory(&path)?;
         Ok(identity)
     }
 
@@ -339,55 +372,76 @@ impl ClientStore {
         {
             return Err(ClientError::InvalidProfile);
         }
-        let path = self.key_path(session_id, participant_id);
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(ClientError::LostKey);
+        #[cfg(unix)]
+        let (file, metadata) = {
+            let directory = open_identity_directory(&self.data_dir_handle, false)?;
+            let name = identity_key_name(session_id, participant_id);
+            let descriptor = rustix::fs::openat(
+                &directory,
+                name.as_str(),
+                rustix::fs::OFlags::RDONLY
+                    | rustix::fs::OFlags::CLOEXEC
+                    | rustix::fs::OFlags::NOFOLLOW
+                    | rustix::fs::OFlags::NONBLOCK,
+                rustix::fs::Mode::empty(),
+            )
+            .map_err(map_existing_key_open_error)?;
+            let file = File::from(descriptor);
+            let metadata = file.metadata().map_err(ClientError::KeyIo)?;
+            (file, metadata)
+        };
+        #[cfg(windows)]
+        let (file, metadata) = {
+            let path = self.key_path(session_id, participant_id);
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    return Err(ClientError::LostKey);
+                }
+                Err(error) => return Err(ClientError::KeyIo(error)),
+            };
+            if !metadata.file_type().is_file() {
+                return Err(ClientError::CorruptKey);
             }
-            Err(error) => return Err(ClientError::KeyIo(error)),
+            let file = File::open(&path).map_err(ClientError::KeyIo)?;
+            (file, metadata)
         };
         if !metadata.file_type().is_file() {
             return Err(ClientError::CorruptKey);
         }
         validate_key_permissions(&metadata)?;
-        if metadata.len() != KEY_FILE_BYTES as u64 {
+        if !(LEGACY_KEY_FILE_BYTES as u64..=KEY_MAX_FILE_BYTES as u64).contains(&metadata.len()) {
             return Err(ClientError::CorruptKey);
         }
 
-        let file = File::open(&path).map_err(ClientError::KeyIo)?;
-        let mut bytes = Vec::with_capacity(KEY_FILE_BYTES);
+        let mut bytes = Zeroizing::new(Vec::with_capacity(KEY_MAX_FILE_BYTES));
         if let Err(error) = file
-            .take((KEY_FILE_BYTES + 1) as u64)
+            .take((KEY_MAX_FILE_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
         {
-            bytes.zeroize();
             return Err(ClientError::KeyIo(error));
         }
-        if bytes.len() != KEY_FILE_BYTES || &bytes[..KEY_MAGIC.len()] != KEY_MAGIC {
-            bytes.zeroize();
+        if bytes.len() as u64 != metadata.len() || bytes.len() > KEY_MAX_FILE_BYTES {
             return Err(ClientError::CorruptKey);
         }
-        if &bytes[8..24] != session_id.as_bytes() {
-            bytes.zeroize();
-            return Err(ClientError::CorruptKey);
-        }
-        if &bytes[24..40] != participant_id.as_bytes() {
-            bytes.zeroize();
-            return Err(ClientError::CorruptKey);
-        }
-        if bytes[40..56] != self.store_id[..] {
-            bytes.zeroize();
-            return Err(ClientError::IdentityDiscontinuity);
-        }
-        let mut seed = [0_u8; 32];
-        seed.copy_from_slice(&bytes[56..88]);
-        bytes.zeroize();
-        let identity = SigningIdentity::from_seed(seed);
+        let legacy = bytes.starts_with(LEGACY_KEY_MAGIC);
+        let seed = if legacy {
+            decode_legacy_key(&bytes, session_id, participant_id, &self.store_id)?
+        } else {
+            decode_key_envelope(&bytes, session_id, participant_id, &self.store_id)?
+        };
+        let identity = SigningIdentity::from_seed(&seed);
         if let Some(profile) = self.load_profile(session_id, participant_id).await?
             && identity.public_key() != profile.participant_public_key
         {
             return Err(ClientError::IdentityMismatch);
+        }
+        #[cfg(windows)]
+        if legacy {
+            let path = self.key_path(session_id, participant_id);
+            let upgraded =
+                encode_key_envelope(seed.as_bytes(), session_id, participant_id, &self.store_id)?;
+            replace_legacy_key_file(&path, &upgraded)?;
         }
         Ok(identity)
     }
@@ -622,6 +676,7 @@ impl ClientStore {
         Ok(())
     }
 
+    #[cfg(windows)]
     fn key_path(&self, session_id: SessionId, participant_id: ParticipantId) -> PathBuf {
         self.data_dir.join(KEY_DIRECTORY).join(format!(
             "{}-{}.key",
@@ -629,6 +684,143 @@ impl ClientStore {
             participant_id.as_uuid()
         ))
     }
+}
+
+fn encode_key_envelope(
+    seed: &[u8; 32],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<Zeroizing<Vec<u8>>, ClientError> {
+    #[cfg(windows)]
+    let scheme = KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER;
+    #[cfg(unix)]
+    let scheme = KEY_SCHEME_UNIX_OWNER_ONLY;
+    #[cfg(not(any(unix, windows)))]
+    return Err(ClientError::KeyProtection);
+
+    let mut envelope = Vec::with_capacity(KEY_HEADER_BYTES + 128);
+    envelope.extend_from_slice(KEY_MAGIC);
+    envelope.extend_from_slice(&KEY_FORMAT_VERSION.to_be_bytes());
+    envelope.push(scheme);
+    envelope.extend_from_slice(session_id.as_bytes());
+    envelope.extend_from_slice(participant_id.as_bytes());
+    envelope.extend_from_slice(store_id);
+
+    let payload = {
+        #[cfg(windows)]
+        {
+            let entropy = key_envelope_entropy(&envelope);
+            Zeroizing::new(
+                equalturn_key_protection::protect_seed(seed, &entropy)
+                    .map_err(|_| ClientError::KeyProtection)?,
+            )
+        }
+        #[cfg(unix)]
+        {
+            Zeroizing::new(seed.to_vec())
+        }
+    };
+    if payload.is_empty() || payload.len() > KEY_MAX_PAYLOAD_BYTES {
+        return Err(ClientError::KeyProtection);
+    }
+    envelope.extend_from_slice(&payload);
+    Ok(Zeroizing::new(envelope))
+}
+
+fn decode_key_envelope(
+    bytes: &[u8],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<SigningSeed, ClientError> {
+    if bytes.len() < KEY_HEADER_BYTES + 1
+        || bytes.len() > KEY_MAX_FILE_BYTES
+        || &bytes[..8] != KEY_MAGIC
+        || u16::from_be_bytes([bytes[8], bytes[9]]) != KEY_FORMAT_VERSION
+    {
+        return Err(ClientError::CorruptKey);
+    }
+    if &bytes[11..27] != session_id.as_bytes() || &bytes[27..43] != participant_id.as_bytes() {
+        return Err(ClientError::CorruptKey);
+    }
+    if bytes[43..59] != store_id[..] {
+        return Err(ClientError::IdentityDiscontinuity);
+    }
+
+    let payload = &bytes[KEY_HEADER_BYTES..];
+    if payload.is_empty() || payload.len() > KEY_MAX_PAYLOAD_BYTES {
+        return Err(ClientError::CorruptKey);
+    }
+    match bytes[10] {
+        #[cfg(unix)]
+        KEY_SCHEME_UNIX_OWNER_ONLY if payload.len() == 32 => {
+            let mut seed = Zeroizing::new([0_u8; 32]);
+            seed.copy_from_slice(payload);
+            Ok(SigningSeed::from_zeroizing(seed))
+        }
+        #[cfg(windows)]
+        KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER => {
+            let entropy = key_envelope_entropy(&bytes[..KEY_HEADER_BYTES]);
+            equalturn_key_protection::unprotect_seed(payload, &entropy)
+                .map(SigningSeed::from_zeroizing)
+                .map_err(|_| ClientError::CorruptKey)
+        }
+        _ => Err(ClientError::CorruptKey),
+    }
+}
+
+fn decode_legacy_key(
+    bytes: &[u8],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<SigningSeed, ClientError> {
+    if bytes.len() != LEGACY_KEY_FILE_BYTES || &bytes[..8] != LEGACY_KEY_MAGIC {
+        return Err(ClientError::CorruptKey);
+    }
+    if &bytes[8..24] != session_id.as_bytes() || &bytes[24..40] != participant_id.as_bytes() {
+        return Err(ClientError::CorruptKey);
+    }
+    if bytes[40..56] != store_id[..] {
+        return Err(ClientError::IdentityDiscontinuity);
+    }
+    let mut seed = Zeroizing::new([0_u8; 32]);
+    seed.copy_from_slice(&bytes[56..88]);
+    Ok(SigningSeed::from_zeroizing(seed))
+}
+
+#[cfg(windows)]
+fn key_envelope_entropy(header: &[u8]) -> Zeroizing<Vec<u8>> {
+    let mut entropy = Zeroizing::new(Vec::with_capacity(
+        DPAPI_ENTROPY_DOMAIN.len() + header.len(),
+    ));
+    entropy.extend_from_slice(DPAPI_ENTROPY_DOMAIN);
+    entropy.extend_from_slice(header);
+    entropy
+}
+
+#[cfg(windows)]
+fn replace_legacy_key_file(path: &Path, bytes: &[u8]) -> Result<(), ClientError> {
+    let parent = path.parent().ok_or(ClientError::CorruptKey)?;
+    let temporary = parent.join(format!(".key-upgrade-{}.tmp", Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    let result = (|| {
+        let mut file = options.open(&temporary).map_err(ClientError::KeyIo)?;
+        file.write_all(bytes).map_err(ClientError::KeyIo)?;
+        file.sync_all().map_err(ClientError::KeyIo)?;
+        fs::rename(&temporary, path).map_err(ClientError::KeyIo)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        match fs::remove_file(&temporary) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(cleanup_error) => return Err(ClientError::KeyIo(cleanup_error)),
+        }
+    }
+    result
 }
 
 fn verify_outbox_rows(
@@ -847,6 +1039,7 @@ fn uuid_string(value: Uuid) -> String {
     value.hyphenated().to_string()
 }
 
+#[cfg(not(unix))]
 fn has_session_keys(directory: &Path) -> Result<bool, ClientError> {
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
@@ -866,50 +1059,208 @@ fn has_session_keys(directory: &Path) -> Result<bool, ClientError> {
     Ok(false)
 }
 
-fn create_private_directory(directory: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        let mut builder = fs::DirBuilder::new();
-        builder.recursive(true).mode(0o700);
-        builder.create(directory).map_err(ClientError::KeyIo)?;
-        let metadata = fs::symlink_metadata(directory).map_err(ClientError::KeyIo)?;
-        let mode = metadata.permissions().mode() & 0o777;
-        if !metadata.file_type().is_dir() || mode & 0o077 != 0 || mode & 0o700 != 0o700 {
-            return Err(ClientError::InsecureKeyPermissions);
+#[cfg(unix)]
+fn has_session_keys(data_directory: &File) -> Result<bool, ClientError> {
+    let directory = match open_identity_directory(data_directory, false) {
+        Ok(directory) => directory,
+        Err(ClientError::LostKey) => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let entries = rustix::fs::Dir::read_from(&directory)
+        .map_err(|error| ClientError::KeyIo(io::Error::from(error)))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| ClientError::KeyIo(io::Error::from(error)))?;
+        if entry.file_name().to_bytes().ends_with(b".key") {
+            return Ok(true);
         }
     }
-    #[cfg(not(unix))]
+    Ok(false)
+}
+
+#[cfg(not(unix))]
+fn create_private_directory(directory: &Path) -> Result<(), ClientError> {
     fs::create_dir_all(directory).map_err(ClientError::KeyIo)?;
     Ok(())
 }
 
-fn prepare_data_directory(directory: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
+#[cfg(unix)]
+fn prepare_data_directory(directory: &Path) -> Result<File, ClientError> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    use std::path::PathBuf;
+
+    let normalized_directory = directory
+        .components()
+        .fold(PathBuf::new(), |mut path, part| {
+            path.push(part.as_os_str());
+            path
+        });
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true).mode(0o700);
+    builder
+        .create(&normalized_directory)
+        .map_err(ClientError::KeyIo)?;
+    let descriptor = rustix::fs::open(
+        &normalized_directory,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::DIRECTORY
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| {
+        if matches!(error, rustix::io::Errno::LOOP | rustix::io::Errno::NOTDIR) {
+            ClientError::InsecureDataDirectory
+        } else {
+            ClientError::KeyIo(io::Error::from(error))
+        }
+    })?;
+    let directory = File::from(descriptor);
+    let metadata = directory.metadata().map_err(ClientError::KeyIo)?;
+    if !metadata.is_dir()
+        || !unix_owner_and_mode_are_private(
+            metadata.uid(),
+            rustix::process::geteuid().as_raw(),
+            metadata.mode(),
+            0o700,
+        )
     {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        if !directory.exists() {
-            let mut builder = fs::DirBuilder::new();
-            builder.recursive(true).mode(0o700);
-            builder.create(directory).map_err(ClientError::KeyIo)?;
-        }
-        let metadata = fs::symlink_metadata(directory).map_err(ClientError::KeyIo)?;
-        let mode = metadata.permissions().mode() & 0o777;
-        if !metadata.file_type().is_dir() || mode & 0o077 != 0 || mode & 0o700 != 0o700 {
-            return Err(ClientError::InsecureDataDirectory);
-        }
+        return Err(ClientError::InsecureDataDirectory);
     }
-    #[cfg(not(unix))]
+    Ok(directory)
+}
+
+#[cfg(not(unix))]
+fn prepare_data_directory(directory: &Path) -> Result<(), ClientError> {
     fs::create_dir_all(directory).map_err(ClientError::KeyIo)?;
     Ok(())
+}
+
+#[cfg(unix)]
+fn open_identity_directory(data_directory: &File, create: bool) -> Result<File, ClientError> {
+    use rustix::io::Errno;
+
+    if create {
+        match rustix::fs::mkdirat(data_directory, KEY_DIRECTORY, rustix::fs::Mode::from(0o700)) {
+            Ok(()) => data_directory.sync_all().map_err(ClientError::KeyIo)?,
+            Err(Errno::EXIST) => {}
+            Err(error) => return Err(ClientError::KeyIo(io::Error::from(error))),
+        }
+    }
+
+    let descriptor = rustix::fs::openat(
+        data_directory,
+        KEY_DIRECTORY,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::DIRECTORY
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| match error {
+        Errno::NOENT if !create => ClientError::LostKey,
+        Errno::LOOP | Errno::NOTDIR => ClientError::InsecureKeyPermissions,
+        other => ClientError::KeyIo(io::Error::from(other)),
+    })?;
+    let directory = File::from(descriptor);
+    let metadata = directory.metadata().map_err(ClientError::KeyIo)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if !metadata.is_dir()
+            || !unix_owner_and_mode_are_private(
+                metadata.uid(),
+                rustix::process::geteuid().as_raw(),
+                metadata.mode(),
+                0o700,
+            )
+        {
+            return Err(ClientError::InsecureKeyPermissions);
+        }
+    }
+    Ok(directory)
+}
+
+#[cfg(unix)]
+fn persist_new_unix_key(directory: &File, name: &str, bytes: &[u8]) -> Result<(), ClientError> {
+    use rustix::io::Errno;
+
+    let descriptor = rustix::fs::openat(
+        directory,
+        name,
+        rustix::fs::OFlags::WRONLY
+            | rustix::fs::OFlags::CREATE
+            | rustix::fs::OFlags::EXCL
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::from(0o600),
+    )
+    .map_err(|error| {
+        if error == Errno::EXIST {
+            ClientError::ProfileConflict
+        } else {
+            ClientError::KeyIo(io::Error::from(error))
+        }
+    })?;
+    let mut file = File::from(descriptor);
+    let operation = rustix::fs::fchmod(&file, rustix::fs::Mode::from(0o600))
+        .map_err(io::Error::from)
+        .map_err(ClientError::KeyIo)
+        .and_then(|()| {
+            let metadata = file.metadata().map_err(ClientError::KeyIo)?;
+            validate_key_permissions(&metadata)?;
+            file.write_all(bytes).map_err(ClientError::KeyIo)?;
+            file.sync_all().map_err(ClientError::KeyIo)?;
+            directory.sync_all().map_err(ClientError::KeyIo)
+        });
+    if let Err(error) = operation {
+        drop(file);
+        let cleanup = rustix::fs::unlinkat(directory, name, rustix::fs::AtFlags::empty())
+            .map_err(io::Error::from)
+            .and_then(|()| directory.sync_all());
+        return match cleanup {
+            Ok(()) => Err(error),
+            Err(cleanup_error) => Err(ClientError::KeyIo(cleanup_error)),
+        };
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn identity_key_name(session_id: SessionId, participant_id: ParticipantId) -> String {
+    format!("{}-{}.key", session_id.as_uuid(), participant_id.as_uuid())
+}
+
+#[cfg(unix)]
+fn map_existing_key_open_error(error: rustix::io::Errno) -> ClientError {
+    match error {
+        rustix::io::Errno::NOENT => ClientError::LostKey,
+        rustix::io::Errno::LOOP | rustix::io::Errno::ISDIR => ClientError::CorruptKey,
+        other => ClientError::KeyIo(io::Error::from(other)),
+    }
+}
+
+#[cfg(unix)]
+fn unix_owner_and_mode_are_private(
+    owner: u32,
+    expected_owner: u32,
+    mode: u32,
+    required_owner_bits: u32,
+) -> bool {
+    owner == expected_owner
+        && mode & 0o7077 == 0
+        && mode & required_owner_bits == required_owner_bits
 }
 
 fn validate_key_permissions(metadata: &fs::Metadata) -> Result<(), ClientError> {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = metadata.permissions().mode() & 0o777;
-        if mode & 0o077 != 0 || mode & 0o400 == 0 {
+        use std::os::unix::fs::MetadataExt;
+        if !unix_owner_and_mode_are_private(
+            metadata.uid(),
+            rustix::process::geteuid().as_raw(),
+            metadata.mode(),
+            0o400,
+        ) {
             return Err(ClientError::InsecureKeyPermissions);
         }
     }
@@ -918,15 +1269,8 @@ fn validate_key_permissions(metadata: &fs::Metadata) -> Result<(), ClientError> 
     Ok(())
 }
 
-fn sync_parent_directory(path: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(ClientError::KeyIo)?;
-    }
-    #[cfg(not(unix))]
-    let _ = path;
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> Result<(), ClientError> {
     Ok(())
 }
 
@@ -946,4 +1290,18 @@ fn map_sqlx(error: sqlx::Error) -> ClientError {
         }
     }
     ClientError::Storage(error)
+}
+
+#[cfg(all(test, unix))]
+mod unix_key_permission_tests {
+    use super::unix_owner_and_mode_are_private;
+
+    #[test]
+    fn private_storage_requires_the_expected_owner_and_no_group_or_other_access() {
+        assert!(unix_owner_and_mode_are_private(1000, 1000, 0o700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1001, 1000, 0o700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o740, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o4700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o600, 0o700));
+    }
 }

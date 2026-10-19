@@ -7,4 +7,5 @@
 - Do not claim complete AI detection or resistance to a workstation administrator.
 - Keep privileged operations in a small OS-specific service boundary; never put the UI in an elevated process.
 - Do not collect unrelated personal data such as keystrokes, prompts, passwords, full browsing history, or filesystem contents.
+- Never run experimental endpoint enforcement on the active development host. Follow [the enforcement test safety policy](docs/enforcement-test-safety.md); unavailable isolation means skip the dangerous test, never fall back to the host.
 - Keep commits focused and do not add generated binaries, credentials, machine-specific paths, or AI attribution.

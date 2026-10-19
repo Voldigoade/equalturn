@@ -2,7 +2,7 @@
 
 **Checked:** 19 October 2026  
 **Scope:** research artifact only. The original Phase 0 v1 sample and schema are unchanged; this expansion is published as `registry/registry-v2.json` with its own v2 schema. Neither registry version is an enforcement policy.  
-**Count:** 127 distinct provider/product/surface records across the requested categories.
+**Initial expansion count:** 127 distinct provider/product/surface records across the requested categories. The subsequent [Stage 6 quality audit](registry-quality-audit.md) split Mistral Vibe Code and MiniMax Code into separate records; the current v2 registry has 129 entries, 132 provenance records, and 58 indicators. This document preserves the initial 127-row research ledger rather than silently rewriting its historical grouping.
 **Evidence standard:** each row links to a first-party product page, documentation page, or upstream project repository checked on the date above. A URL is provenance for the product/surface claim, not an endorsement or proof that every deployment uses that route.
 
 ## Findings

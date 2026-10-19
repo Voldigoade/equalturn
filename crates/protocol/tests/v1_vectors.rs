@@ -1,6 +1,6 @@
 use equalturn_protocol::{
     EventBody, EventId, EventPayload, Hash32, OsFamily, ParticipantEvent, ParticipantId,
-    ProtocolError, SessionId, SignatureBytes, SigningIdentity, validate_event_chain,
+    ProtocolError, SessionId, SignatureBytes, SigningIdentity, SigningSeed, validate_event_chain,
 };
 
 fn vector_body() -> EventBody {
@@ -47,7 +47,7 @@ fn session_started_v1_signing_bytes_match_golden_vector() {
 
 #[test]
 fn signed_event_verifies_and_payload_mutation_fails() {
-    let identity = SigningIdentity::from_seed([7; 32]);
+    let identity = test_identity(7);
     let event = ParticipantEvent::sign(vector_body(), &identity).expect("event signs");
     event
         .verify_with_key(&identity.public_key())
@@ -62,7 +62,7 @@ fn signed_event_verifies_and_payload_mutation_fails() {
         Err(ProtocolError::InvalidSignature)
     ));
 
-    let other = SigningIdentity::from_seed([8; 32]);
+    let other = test_identity(8);
     assert!(matches!(
         event.verify_with_key(&other.public_key()),
         Err(ProtocolError::InvalidSignature)
@@ -71,7 +71,7 @@ fn signed_event_verifies_and_payload_mutation_fails() {
 
 #[test]
 fn event_json_uses_hex_for_binary_material() {
-    let identity = SigningIdentity::from_seed([9; 32]);
+    let identity = test_identity(9);
     let event = ParticipantEvent::sign(vector_body(), &identity).expect("event signs");
     let json = serde_json::to_value(&event).expect("event serializes");
     assert!(json["signature"].as_str().is_some_and(|s| s.len() == 128));
@@ -85,7 +85,7 @@ fn event_json_uses_hex_for_binary_material() {
 
 #[test]
 fn truncated_and_random_signature_material_is_rejected() {
-    let identity = SigningIdentity::from_seed([10; 32]);
+    let identity = test_identity(10);
     let event = ParticipantEvent::sign(vector_body(), &identity).expect("event signs");
     let mut json = serde_json::to_value(&event).expect("event serializes");
     json["signature"] = serde_json::Value::String("00".repeat(63));
@@ -101,7 +101,7 @@ fn truncated_and_random_signature_material_is_rejected() {
 
 #[test]
 fn chain_validator_reports_interior_and_leading_gaps() {
-    let identity = SigningIdentity::from_seed([11; 32]);
+    let identity = test_identity(11);
     let first = ParticipantEvent::sign(vector_body(), &identity).expect("event signs");
     let second_body = EventBody {
         sequence: 3,
@@ -132,7 +132,7 @@ fn chain_validator_reports_interior_and_leading_gaps() {
 
 #[test]
 fn chain_rejects_wrong_previous_hash_duplicate_and_rollback() {
-    let identity = SigningIdentity::from_seed([12; 32]);
+    let identity = test_identity(12);
     let first = ParticipantEvent::sign(vector_body(), &identity).expect("event signs");
     let mut bad_link_body = EventBody {
         sequence: 2,
@@ -219,7 +219,7 @@ fn unsupported_version_nil_ids_and_invalid_payload_are_rejected() {
     let mut body = vector_body();
     body.payload = EventPayload::ParticipantJoined {
         nickname: "bad name".to_owned(),
-        public_key: SigningIdentity::from_seed([13; 32]).public_key(),
+        public_key: test_identity(13).public_key(),
         client_version: String::new(),
         os_family: OsFamily::Linux,
         os_bucket: String::new(),
@@ -237,4 +237,8 @@ fn unsupported_version_nil_ids_and_invalid_payload_are_rejected() {
         body.signing_bytes(),
         Err(ProtocolError::InvalidTarget)
     ));
+}
+
+fn test_identity(seed: u8) -> SigningIdentity {
+    SigningIdentity::from_seed(&SigningSeed::from_bytes([seed; 32]))
 }

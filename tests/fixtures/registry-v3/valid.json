@@ -1,0 +1,45 @@
+{
+  "schema_version": 3,
+  "registry_version": "0.4.0",
+  "last_updated": "2026-10-19",
+  "purpose": "research_only",
+  "entries": [
+    {
+      "id": "sample-product",
+      "provider": {
+        "id": "sample-provider",
+        "name": "Sample Provider",
+        "aliases": ["Sample"]
+      },
+      "product": "Sample Assistant",
+      "categories": ["hosted_chat"],
+      "surfaces": ["web"],
+      "status": "observed",
+      "sources": [
+        {
+          "id": "source-1",
+          "url": "https://example.com/product",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "First-party product page identifies this hosted surface."
+        }
+      ],
+      "indicators": [
+        {
+          "kind": "web_hostname",
+          "value": "example.com",
+          "platforms": ["unknown"],
+          "surfaces": ["web"],
+          "scope": "Hosted sample product hostname",
+          "source_id": "source-1",
+          "verified_on": "2026-10-19",
+          "confidence": "high",
+          "actionability": "advisory",
+          "false_positive_risk": "medium",
+          "lifecycle": "current",
+          "limitations": "A hostname match does not prove intent or product use."
+        }
+      ],
+      "relationships": []
+    }
+  ]
+}
