@@ -595,6 +595,7 @@ dependencies = [
 name = "equalturn-client-core"
 version = "0.1.0"
 dependencies = [
+ "bytes",
  "equalturn-key-protection",
  "equalturn-protocol",
  "equalturn-report",

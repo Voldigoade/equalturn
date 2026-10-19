@@ -1,7 +1,7 @@
 use equalturn_protocol::{
     EndReason, EventBody, EventId, EventPayload, Hash32, ManifestHead, OsFamily, ParticipantEvent,
     ParticipantId, PublicKey, RelayNotice, RelayNoticeKind, RelayReceipt, SessionId,
-    SessionManifest, SigningIdentity, fingerprint,
+    SessionManifest, SigningIdentity, SigningSeed, fingerprint,
 };
 use equalturn_report::{
     EvidenceBundle, ParticipantSummary, RelayIdentity, RelayIdentityStatus, VerificationStatus,
@@ -14,9 +14,9 @@ struct Fixture {
 }
 
 fn fixture() -> Fixture {
-    let relay = SigningIdentity::from_seed([70; 32]);
-    let alice = SigningIdentity::from_seed([71; 32]);
-    let bob = SigningIdentity::from_seed([72; 32]);
+    let relay = test_identity(70);
+    let alice = test_identity(71);
+    let bob = test_identity(72);
     let session_id = SessionId::try_new_v4().expect("session ID");
     let alice_id = ParticipantId::try_new_v4().expect("alice ID");
     let bob_id = ParticipantId::try_new_v4().expect("bob ID");
@@ -292,7 +292,7 @@ fn receipt_notice_and_manifest_mutations_are_invalid() {
 #[test]
 fn valid_relay_signatures_cannot_reorder_a_participants_event_receipts() {
     let mut fixture = fixture();
-    let relay = SigningIdentity::from_seed([70; 32]);
+    let relay = test_identity(70);
     let start_id = fixture
         .report
         .events
@@ -345,7 +345,7 @@ fn valid_relay_signatures_cannot_reorder_a_participants_event_receipts() {
 #[test]
 fn supplied_relay_pin_must_match_the_report_key() {
     let fixture = fixture();
-    let wrong_key = SigningIdentity::from_seed([73; 32]).public_key();
+    let wrong_key = test_identity(73).public_key();
     let result = fixture.report.verify_with_relay_key(&wrong_key);
 
     assert_eq!(result.status, VerificationStatus::Invalid);
@@ -387,7 +387,7 @@ fn missing_evidence_order_and_local_only_event_are_reported_as_gaps() {
         .report
         .receipts
         .retain(|receipt| receipt.evidence_order != 4);
-    let alice = SigningIdentity::from_seed([71; 32]);
+    let alice = test_identity(71);
     let alice_id = fixture.report.participants[0].participant_id;
     let accepted_head = fixture
         .report
@@ -469,4 +469,8 @@ fn json_and_markdown_do_not_emit_peer_addresses_or_local_identifiers() {
     assert!(!markdown.contains("192.0.2.1"));
     assert!(markdown.contains("Synthetic AI access attempt"));
     assert!(markdown.contains("Relay identity: unanchored"));
+}
+
+fn test_identity(seed: u8) -> SigningIdentity {
+    SigningIdentity::from_seed(&SigningSeed::from_bytes([seed; 32]))
 }

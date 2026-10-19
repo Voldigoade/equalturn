@@ -12,7 +12,7 @@ use std::{
 use equalturn_protocol::{
     EventBody, EventPayload, Hash32, MAX_EVENT_BYTES, MAX_SESSION_EVENTS, PROTOCOL_VERSION,
     ParticipantEvent, ParticipantId, ProtocolError, PublicKey, RelayReceipt, SessionId,
-    SigningIdentity,
+    SigningIdentity, SigningSeed,
 };
 use serde::{Deserialize, Serialize};
 use sqlx::{
@@ -329,8 +329,9 @@ impl ClientStore {
             create_private_directory(parent)?;
         }
 
-        let seed = Zeroizing::new(identity.seed_bytes());
-        let bytes = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
+        let seed = identity.export_seed();
+        let bytes =
+            encode_key_envelope(seed.as_bytes(), session_id, participant_id, &self.store_id)?;
 
         #[cfg(unix)]
         persist_new_unix_key(
@@ -429,7 +430,7 @@ impl ClientStore {
         } else {
             decode_key_envelope(&bytes, session_id, participant_id, &self.store_id)?
         };
-        let identity = SigningIdentity::from_seed(*seed);
+        let identity = SigningIdentity::from_seed(&seed);
         if let Some(profile) = self.load_profile(session_id, participant_id).await?
             && identity.public_key() != profile.participant_public_key
         {
@@ -438,7 +439,8 @@ impl ClientStore {
         #[cfg(windows)]
         if legacy {
             let path = self.key_path(session_id, participant_id);
-            let upgraded = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
+            let upgraded =
+                encode_key_envelope(seed.as_bytes(), session_id, participant_id, &self.store_id)?;
             replace_legacy_key_file(&path, &upgraded)?;
         }
         Ok(identity)
@@ -731,7 +733,7 @@ fn decode_key_envelope(
     session_id: SessionId,
     participant_id: ParticipantId,
     store_id: &[u8; 16],
-) -> Result<Zeroizing<[u8; 32]>, ClientError> {
+) -> Result<SigningSeed, ClientError> {
     if bytes.len() < KEY_HEADER_BYTES + 1
         || bytes.len() > KEY_MAX_FILE_BYTES
         || &bytes[..8] != KEY_MAGIC
@@ -755,12 +757,13 @@ fn decode_key_envelope(
         KEY_SCHEME_UNIX_OWNER_ONLY if payload.len() == 32 => {
             let mut seed = Zeroizing::new([0_u8; 32]);
             seed.copy_from_slice(payload);
-            Ok(seed)
+            Ok(SigningSeed::from_zeroizing(seed))
         }
         #[cfg(windows)]
         KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER => {
             let entropy = key_envelope_entropy(&bytes[..KEY_HEADER_BYTES]);
             equalturn_key_protection::unprotect_seed(payload, &entropy)
+                .map(SigningSeed::from_zeroizing)
                 .map_err(|_| ClientError::CorruptKey)
         }
         _ => Err(ClientError::CorruptKey),
@@ -772,7 +775,7 @@ fn decode_legacy_key(
     session_id: SessionId,
     participant_id: ParticipantId,
     store_id: &[u8; 16],
-) -> Result<Zeroizing<[u8; 32]>, ClientError> {
+) -> Result<SigningSeed, ClientError> {
     if bytes.len() != LEGACY_KEY_FILE_BYTES || &bytes[..8] != LEGACY_KEY_MAGIC {
         return Err(ClientError::CorruptKey);
     }
@@ -784,7 +787,7 @@ fn decode_legacy_key(
     }
     let mut seed = Zeroizing::new([0_u8; 32]);
     seed.copy_from_slice(&bytes[56..88]);
-    Ok(seed)
+    Ok(SigningSeed::from_zeroizing(seed))
 }
 
 #[cfg(windows)]

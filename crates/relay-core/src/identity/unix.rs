@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use equalturn_protocol::SigningIdentity;
+use equalturn_protocol::{SigningIdentity, SigningSeed};
 use rustix::{
     fs::{self as unix_fs, Mode, OFlags},
     io::Errno,
@@ -30,8 +30,8 @@ pub fn load_or_create_relay_identity(path: &Path) -> Result<SigningIdentity, Rel
     }
 
     let identity = SigningIdentity::generate().map_err(|_| RelayError::Randomness)?;
-    let seed = Zeroizing::new(identity.seed_bytes());
-    match create_identity_file(&directory, name, &seed) {
+    let seed = identity.export_seed();
+    match create_identity_file(&directory, name, seed.as_bytes()) {
         Ok(()) => Ok(identity),
         Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
             read_existing_identity(&directory, name)?.ok_or_else(|| {
@@ -121,7 +121,9 @@ fn read_existing_identity(
             "relay identity file has an invalid length",
         ));
     }
-    Ok(Some(SigningIdentity::from_seed(*seed)))
+    Ok(Some(SigningIdentity::from_seed(
+        &SigningSeed::from_zeroizing(seed),
+    )))
 }
 
 fn create_identity_file(

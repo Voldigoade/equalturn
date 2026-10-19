@@ -30,11 +30,11 @@ pub async fn run(context: &Context, command: SessionCommand) -> Result<(), AppEr
 
 async fn create(context: &Context, args: CreateArgs) -> Result<(), AppError> {
     let (session_id, profile, invitation_code, event) = if let Some(session) = args.resume_session {
-        let session_id = parse_session_id(&session)?;
         let invitation_code =
-            InvitationCode::parse(args.invitation_code.as_deref().ok_or_else(|| {
+            InvitationCode::parse_owned(args.invitation_code.ok_or_else(|| {
                 AppError::Message("--invitation-code is required to resume".into())
             })?)?;
+        let session_id = parse_session_id(&session)?;
         let profile = select_profile(&context.store, session_id, None).await?;
         let event = context
             .store
@@ -96,7 +96,7 @@ async fn create(context: &Context, args: CreateArgs) -> Result<(), AppError> {
 
     let request = CreateSessionRequest {
         protocol_version: 1,
-        invitation_code: invitation_code.as_str().to_owned(),
+        invitation_code,
         creator_event: event,
     };
     match context
@@ -107,7 +107,7 @@ async fn create(context: &Context, args: CreateArgs) -> Result<(), AppError> {
         Ok(response) => {
             context.store.acknowledge(&response.receipt).await?;
             println!("Session created");
-            println!("Code: {}", invitation_code.as_str());
+            println!("Code: {}", request.invitation_code.as_str());
             println!("Session: {}", session_id.as_uuid());
             println!("Participant: {}", profile.nickname);
             println!("Participant ID: {}", profile.participant_id.as_uuid());
@@ -119,7 +119,7 @@ async fn create(context: &Context, args: CreateArgs) -> Result<(), AppError> {
             eprintln!("Session: {}", session_id.as_uuid());
             eprintln!(
                 "Invitation code to retain for retry: {}",
-                invitation_code.as_str()
+                request.invitation_code.as_str()
             );
             eprintln!(
                 "Retry with: equalturn session create --resume-session {} --invitation-code <CODE>",
@@ -137,11 +137,12 @@ async fn create(context: &Context, args: CreateArgs) -> Result<(), AppError> {
 }
 
 async fn join(context: &Context, args: JoinArgs) -> Result<(), AppError> {
+    let invitation_code = InvitationCode::parse_owned(args.invitation_code)?;
     validate_nickname(&args.nickname)?;
     let (relay_public_key, relay_fingerprint) = context.relay.relay_identity().await?;
     let resolved = context
         .relay
-        .resolve_invitation(&args.invitation_code)
+        .resolve_invitation(invitation_code.as_str())
         .await?;
     let session_id = resolved.session_id;
     let existing = context.store.profiles_for_session(session_id).await?;
@@ -158,7 +159,7 @@ async fn join(context: &Context, args: JoinArgs) -> Result<(), AppError> {
                 && matches!(event.body.payload, EventPayload::ParticipantJoined { .. })
         });
         if let Some(join_event) = join_event {
-            return accept_join(context, profile, &args.invitation_code, join_event).await;
+            return accept_join(context, profile, invitation_code, join_event).await;
         }
         println!("Already joined session {}", profile.session_id.as_uuid());
         println!("Participant: {}", profile.nickname);
@@ -196,18 +197,18 @@ async fn join(context: &Context, args: JoinArgs) -> Result<(), AppError> {
         )
         .await?;
     println!("Relay key fingerprint: {}", relay_fingerprint.to_hex());
-    accept_join(context, &profile, &args.invitation_code, join_event).await
+    accept_join(context, &profile, invitation_code, join_event).await
 }
 
 async fn accept_join(
     context: &Context,
     profile: &SessionProfile,
-    invitation_code: &str,
+    invitation_code: InvitationCode,
     join_event: ParticipantEvent,
 ) -> Result<(), AppError> {
     let request = JoinSessionRequest {
         protocol_version: 1,
-        invitation_code: invitation_code.to_owned(),
+        invitation_code,
         join_event,
     };
     match context

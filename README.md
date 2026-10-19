@@ -16,6 +16,7 @@ Participant signatures prove which session key made a claim and whether the incl
 - [AI ecosystem and registry design](docs/ai-registry.md)
 - [Researched registry v2](registry/registry-v2.json) — research data only
 - [Privacy and report model](docs/privacy.md)
+- [Secret lifecycle and storage limits](docs/secret-lifecycle.md)
 - [Prior art](docs/prior-art.md)
 - [Stack decision](docs/stack-decision.md)
 - [Name research](docs/naming.md)

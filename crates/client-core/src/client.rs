@@ -1,9 +1,10 @@
 use std::{collections::HashMap, time::Duration};
 
+use bytes::Bytes;
 use equalturn_protocol::{
     ClientWsMessage, CreateSessionRequest, CreateSessionResponse, EventPayload, Hash32,
-    JoinSessionRequest, JoinSessionResponse, ParticipantEvent, ParticipantId, PublicKey,
-    ResolveInvitationRequest, ResolveInvitationResponse, ServerWsMessage, SessionId,
+    InvitationCode, JoinSessionRequest, JoinSessionResponse, ParticipantEvent, ParticipantId,
+    PublicKey, ResolveInvitationRequest, ResolveInvitationResponse, ServerWsMessage, SessionId,
     SessionStatusResponse, SigningIdentity, SubmitEventResponse, fingerprint,
 };
 use equalturn_report::{EvidenceBundle, MAX_REPORT_EVIDENCE_ORDER};
@@ -17,6 +18,7 @@ use tokio_tungstenite::{
     tungstenite::{Message, protocol::WebSocketConfig},
 };
 use url::Host;
+use zeroize::Zeroizing;
 
 use crate::persistence::{ClientError, SessionProfile};
 
@@ -43,6 +45,8 @@ pub enum RelayClientError {
     InvalidResponse,
     #[error("relay response JSON is invalid")]
     Json(#[from] serde_json::Error),
+    #[error("invitation code is invalid")]
+    InvalidInvitation,
     #[error("local session state could not be read or written")]
     Local(#[from] ClientError),
     #[error("session signing identity does not match the local profile")]
@@ -110,13 +114,15 @@ impl RelayClient {
         &self,
         invitation_code: &str,
     ) -> Result<ResolveInvitationResponse, RelayClientError> {
+        let invitation_code = InvitationCode::parse(invitation_code)
+            .map_err(|_| RelayClientError::InvalidInvitation)?;
         let response: ResolveInvitationResponse = self
             .request_json(
                 Method::POST,
                 "v1/invitations/resolve",
                 Some(&ResolveInvitationRequest {
                     protocol_version: 1,
-                    invitation_code: invitation_code.to_owned(),
+                    invitation_code,
                 }),
             )
             .await?;
@@ -369,7 +375,10 @@ impl RelayClient {
     ) -> Result<T, RelayClientError> {
         let mut request = self.http.request(method, self.endpoint(path)?);
         if let Some(body) = body {
-            request = request.json(body);
+            let body = Zeroizing::new(serde_json::to_vec(body)?);
+            request = request
+                .header(reqwest::header::CONTENT_TYPE, "application/json")
+                .body(Bytes::from_owner(body));
         }
         let response = request.send().await.map_err(map_request_error)?;
         let bytes = checked_response_bytes(response, MAX_SMALL_RESPONSE_BYTES).await?;
@@ -659,6 +668,7 @@ mod tests {
     };
     use equalturn_protocol::{
         EventId, Hash32, ManifestHead, ParticipantId, SessionId, SessionManifest, SigningIdentity,
+        SigningSeed,
     };
     use std::collections::HashMap;
 
@@ -711,9 +721,9 @@ mod tests {
 
     #[test]
     fn signed_final_manifest_must_match_the_stream_heads() {
-        let relay = SigningIdentity::from_seed([81; 32]);
+        let relay = SigningIdentity::from_seed(&SigningSeed::from_bytes([81; 32]));
         let participant = ParticipantId::try_new_v4().expect("participant ID");
-        let signing_identity = SigningIdentity::from_seed([82; 32]);
+        let signing_identity = SigningIdentity::from_seed(&SigningSeed::from_bytes([82; 32]));
         let member_keys = HashMap::from([(participant, signing_identity.public_key())]);
         let expected_hash = Hash32::new([83; 32]);
         let participant_heads = HashMap::from([(participant, (1, expected_hash))]);

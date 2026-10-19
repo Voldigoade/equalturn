@@ -12,6 +12,8 @@ Liveness notices distinguish online, stale, disconnected, and ended. The relay u
 
 The relay signing seed is stored separately from PostgreSQL. On Unix, the key file lives in an owner-controlled `0700` directory, is `0600`, and is published atomically without replacement. On Windows, the key is published with a no-replace hard link, inherits the parent directory's DACL, and the relay rejects reparse-point key paths; operators must protect the parent ACL. The seed is plaintext at rest and filesystem access does not protect against the service account, administrator/root, memory compromise, or backups. See [relay key storage](relay-key-storage.md).
 
+Participant seed wrappers, DPAPI and Unix storage limits, invitation-code handling, and relay database credential handling are documented in [secret lifecycle](secret-lifecycle.md).
+
 The relay does not expose peer addresses in its participant API or reports, and no P2P transport is used. **Privacy limitation:** the relay transport necessarily receives the connecting source address; relay hosting or proxy infrastructure may retain its own connection logs. The application does not persist source addresses as session evidence.
 
 Milestone 1 does not include an endpoint service/daemon, firewall or application control, process or browser observation, a tray UI, registry consumption, registry updates, production hosting, or auto-update. The only AI-related event is explicitly synthetic and user-triggered.

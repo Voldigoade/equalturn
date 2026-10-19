@@ -1,9 +1,9 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt, sync::Arc, time::Duration};
 
 use equalturn_protocol::{
-    EndReason, EventPayload, Hash32, InvitationCode, LivenessState, ManifestHead, ParticipantEvent,
-    ParticipantId, ParticipantView, PublicKey, RelayNotice, RelayNoticeKind, RelayReceipt,
-    SessionId, SessionManifest, SessionState, SigningIdentity, fingerprint, invitation_verifier,
+    EndReason, EventPayload, Hash32, LivenessState, ManifestHead, ParticipantEvent, ParticipantId,
+    ParticipantView, PublicKey, RelayNotice, RelayNoticeKind, RelayReceipt, SessionId,
+    SessionManifest, SessionState, SigningIdentity, fingerprint,
 };
 use equalturn_report::{EvidenceBundle, ParticipantSummary};
 use serde_json::Value;
@@ -25,10 +25,28 @@ const RECOVERY_EVIDENCE_RESERVE: i64 = MAX_SESSION_PARTICIPANTS + TERMINAL_EVIDE
 const MAX_RETAINED_SESSIONS: i64 = 5_000;
 const SESSION_QUOTA_LOCK: i64 = 0x0045_5155_414c_5455;
 
-#[derive(Clone, Debug)]
 pub struct RelayConfig {
-    pub database_url: String,
+    database_url: zeroize::Zeroizing<String>,
     pub max_connections: u32,
+}
+
+impl RelayConfig {
+    pub fn new(database_url: String, max_connections: u32) -> Self {
+        Self {
+            database_url: zeroize::Zeroizing::new(database_url),
+            max_connections,
+        }
+    }
+}
+
+impl fmt::Debug for RelayConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("RelayConfig")
+            .field("database_url", &"[REDACTED]")
+            .field("max_connections", &self.max_connections)
+            .finish()
+    }
 }
 
 pub struct Relay {
@@ -78,7 +96,7 @@ impl Relay {
         let pool = PgPoolOptions::new()
             .max_connections(config.max_connections.max(1))
             .acquire_timeout(Duration::from_secs(5))
-            .connect(&config.database_url)
+            .connect(config.database_url.as_str())
             .await
             .map_err(storage)?;
         Self::with_pool(pool, identity).await
@@ -265,8 +283,8 @@ impl Relay {
         request: equalturn_protocol::CreateSessionRequest,
     ) -> Result<equalturn_protocol::CreateSessionResponse> {
         require_v1(request.protocol_version)?;
-        let invite = InvitationCode::parse(&request.invitation_code)
-            .map_err(|_| RelayError::InvitationRejected)?;
+        let invitation_verifier = request.invitation_code.verifier();
+        drop(request.invitation_code);
         let (nickname, public_key) = validate_join_event(&request.creator_event)?;
         let session_id = request.creator_event.body.session_id;
         let participant_id = request.creator_event.body.participant_id;
@@ -313,7 +331,7 @@ impl Relay {
         )
         .bind(session_id.as_uuid())
         .bind(participant_id.as_uuid())
-        .bind(invite.verifier().as_bytes().as_slice())
+        .bind(invitation_verifier.as_bytes().as_slice())
         .bind(to_i64(expires_at_ms)?)
         .bind(to_i64(now_ms)?)
         .execute(&mut *transaction)
@@ -362,12 +380,12 @@ impl Relay {
             .invitation_limiter
             .lock()
             .await
-            .allow(&request.invitation_code, now_ms)
+            .allow(request.invitation_code.as_str(), now_ms)
         {
             return Err(RelayError::InvitationRejected);
         }
-        let verifier = invitation_verifier(&request.invitation_code)
-            .map_err(|_| RelayError::InvitationRejected)?;
+        let verifier = request.invitation_code.verifier();
+        drop(request.invitation_code);
         let row = sqlx::query(
             "SELECT session_id, invite_expires_at_ms, invite_join_count, state, (SELECT count(*) FROM participants p WHERE p.session_id = sessions.session_id) AS participant_count FROM sessions WHERE invite_hash = $1",
         )
@@ -400,8 +418,8 @@ impl Relay {
         request: equalturn_protocol::JoinSessionRequest,
     ) -> Result<equalturn_protocol::JoinSessionResponse> {
         require_v1(request.protocol_version)?;
-        let invite = InvitationCode::parse(&request.invitation_code)
-            .map_err(|_| RelayError::InvitationRejected)?;
+        let invitation_verifier = request.invitation_code.verifier();
+        drop(request.invitation_code);
         let (nickname, public_key) = validate_join_event(&request.join_event)?;
         let session_id = request.join_event.body.session_id;
         let participant_id = request.join_event.body.participant_id;
@@ -435,7 +453,7 @@ impl Relay {
         .map_err(storage)?
         .ok_or(RelayError::InvitationRejected)?;
         let invite_hash: Vec<u8> = session.try_get("invite_hash").map_err(storage)?;
-        if !constant_time_equal(&invite_hash, invite.verifier().as_bytes()) {
+        if !constant_time_equal(&invite_hash, invitation_verifier.as_bytes()) {
             return Err(RelayError::InvitationRejected);
         }
         let invite_expires: i64 = session.try_get("invite_expires_at_ms").map_err(storage)?;
@@ -1482,9 +1500,23 @@ fn map_insert_error(error: sqlx::Error) -> RelayError {
 #[cfg(test)]
 mod tests {
     use super::{
-        MAX_SESSION_EVENTS, MAX_SESSION_EVIDENCE_ORDER, RECOVERY_EVIDENCE_RESERVE,
+        MAX_SESSION_EVENTS, MAX_SESSION_EVIDENCE_ORDER, RECOVERY_EVIDENCE_RESERVE, RelayConfig,
         ensure_event_capacity, ensure_recovery_capacity, ensure_regular_evidence_capacity,
     };
+
+    #[test]
+    fn relay_configuration_debug_redacts_database_credentials() {
+        let config = RelayConfig::new(
+            "postgres://test_user:synthetic-test-password@localhost/db".to_owned(),
+            4,
+        );
+
+        let rendered = format!("{config:?}");
+
+        assert!(!rendered.contains("synthetic-test-password"));
+        assert!(!rendered.contains("postgres://"));
+        assert!(rendered.contains("[REDACTED]"));
+    }
 
     #[test]
     fn terminal_event_and_end_notice_capacity_are_reserved() {

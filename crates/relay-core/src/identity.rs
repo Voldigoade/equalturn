@@ -12,7 +12,7 @@ use std::{
 };
 
 #[cfg(not(unix))]
-use equalturn_protocol::SigningIdentity;
+use equalturn_protocol::{SigningIdentity, SigningSeed};
 #[cfg(not(unix))]
 use zeroize::Zeroizing;
 
@@ -31,14 +31,17 @@ pub fn load_or_create_relay_identity(path: &Path) -> Result<SigningIdentity, Rel
     };
     fs::create_dir_all(parent).map_err(RelayError::Identity)?;
     let identity = SigningIdentity::generate().map_err(|_| RelayError::Randomness)?;
-    let seed = Zeroizing::new(identity.seed_bytes());
+    let seed = identity.export_seed();
     let temporary_path = parent.join(format!(".equalturn-relay-{}.tmp", uuid::Uuid::new_v4()));
     let mut file = OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&temporary_path)
         .map_err(RelayError::Identity)?;
-    if let Err(error) = file.write_all(&*seed).and_then(|()| file.sync_all()) {
+    if let Err(error) = file
+        .write_all(seed.as_bytes())
+        .and_then(|()| file.sync_all())
+    {
         drop(file);
         return Err(RelayError::Identity(cleanup_temporary_file(
             &temporary_path,
@@ -98,7 +101,9 @@ fn read_existing_identity(path: &Path) -> io::Result<Option<SigningIdentity>> {
             "relay identity file has an invalid length",
         ));
     }
-    Ok(Some(SigningIdentity::from_seed(*seed)))
+    Ok(Some(SigningIdentity::from_seed(
+        &SigningSeed::from_zeroizing(seed),
+    )))
 }
 
 #[cfg(all(not(unix), windows))]

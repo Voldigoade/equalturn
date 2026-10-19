@@ -9,6 +9,7 @@ description = "Local session identity, durable event queue, and relay client for
 [dependencies]
 equalturn-protocol = { path = "../protocol" }
 equalturn-report = { path = "../report" }
+bytes.workspace = true
 futures-util.workspace = true
 reqwest.workspace = true
 sqlx.workspace = true
