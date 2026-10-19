@@ -84,6 +84,21 @@ The 7-day timestamp lifetime bounds how long an online mirror can keep serving a
 
 Production release gates are: three independently accountable root/targets custodians; successful dry-run root rotation; protected `main` and publication environment; limited OIDC/KMS role tests; a reviewed source commit and deterministic target hash; two target signatures; online role smoke test; published repository smoke test; and an Equalturn release that embeds the exact initial root. These gates are not met merely by creating `equalturn-registry`.
 
+## Deterministic target bytes
+
+`tools/build_registry_release.py` validates the v3 source with the checked-in Draft 2020-12 schema and semantic validator, then emits `dist/registry-v3.json`. The ignored `dist/` output is a build artifact; it is not a second maintained source. The publication copy goes to the fixed TUF target name `targets/registry-v3.json`.
+
+The emitted bytes use UTF-8, NFC-normalized text, lexicographically sorted JSON object keys, two-space indentation, and one final newline. The validator requires the semantically ordered arrays (entries, categories, surfaces, sources, indicators, and relationships) to already be canonical; the builder will reject invalid ordering instead of silently rearranging research. NFC key collisions are rejected. The builder enforces the 4 MiB maximum, writes through a same-directory temporary file and refuses to replace the source registry. It adds no build timestamp, host information, or signature. TUF metadata supplies publication versions, expiry, and target hashes.
+
+Reproduce and compare a target with:
+
+```sh
+python3 tools/build_registry_release.py --output dist/registry-v3.json
+python3 tools/build_registry_release.py --output dist/registry-v3.json --check
+```
+
+The checked-in snapshot currently emits 152,438 bytes with SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`. On 19 October 2026, two independent builds matched byte-for-byte and the generated target passed the v3 schema/semantic validator. CI will repeat the generation-and-compare check in its dedicated hardening stage.
+
 ## Security boundary and constraints
 
 - TUF proves that a target is authorized by the configured repository's metadata chain and has the expected length/hash. It does not prove an indicator is true, current, correctly scoped, or safe to block.

@@ -57,7 +57,7 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def _read_json(path: Path, max_bytes: int) -> object:
+def read_json_bounded(path: Path, max_bytes: int) -> object:
     try:
         with path.open("rb") as source:
             contents = source.read(max_bytes + 1)
@@ -104,14 +104,18 @@ def validate(
     registry_path: Path = DEFAULT_REGISTRY,
     schema_path: Path = DEFAULT_SCHEMA,
 ) -> ValidationResult:
-    result = ValidationResult()
     try:
-        registry = _read_json(registry_path, MAX_REGISTRY_BYTES)
-        schema = _read_json(schema_path, MAX_SCHEMA_BYTES)
+        registry = read_json_bounded(registry_path, MAX_REGISTRY_BYTES)
+        schema = read_json_bounded(schema_path, MAX_SCHEMA_BYTES)
     except InputError as error:
-        result.diagnostics.append(Diagnostic("ERROR", error.code, "$", str(error)))
-        return result
+        return ValidationResult(diagnostics=[Diagnostic("ERROR", error.code, "$", str(error))])
 
+    return validate_data(registry, schema)
+
+
+def validate_data(registry: object, schema: object) -> ValidationResult:
+    """Validate an already-parsed registry value against an already-parsed schema."""
+    result = ValidationResult()
     schema_errors = _schema_diagnostics(registry, schema)
     if schema_errors:
         result.diagnostics.extend(schema_errors)
