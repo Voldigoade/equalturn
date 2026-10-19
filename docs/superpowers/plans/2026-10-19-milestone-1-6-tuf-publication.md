@@ -142,7 +142,7 @@
 - [x] Implement explicit update URL/profile selection without coupling it to relay/session identity or background network activity; production remains fail-closed.
 - [x] Report root/metadata versions, registry version, target digest, locally recorded source and refresh time, and current expiry status without raw TUF internals. Signed metadata versions are checked against the installed TUF snapshot.
 - [x] Run focused CLI/registry tests, Clippy and formatting. Registry tests: 49 passed, 1 live smoke test ignored pending compatible staging trust.
-- [ ] Review, commit and push the CLI checkpoint.
+- [x] Review, commit and push the CLI checkpoint (`d3ef025`). No CI workflow was changed, and branch-only pushes do not trigger the existing workflow.
 
 ### Task 8: Remote update, attack, and end-to-end tests
 
