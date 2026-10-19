@@ -108,10 +108,10 @@
 - Consumes: `VerifiedRegistry`, bounded TUF verifier and `REGISTRY_TARGET_PATH`.
 - Produces: `verify_remote_repository(base_url: &Url, bootstrap_root: &[u8], bootstrap_root_sha256: &[u8; 32], state_dir: &Path, now: Timestamp) -> Result<InstalledRegistry, RegistryError>` or a narrower equivalent using `sigstore_tuf::HttpRepository`.
 
-- [ ] Add RED tests for non-HTTPS URLs, embedded credentials, query/fragment URLs, downgrade redirects, invalid target/hash, and bounded response handling.
-- [ ] Use `sigstore-tuf`'s HTTP client with explicit connect/read/overall timeouts, redirects disabled, HTTPS-only validation, and current TUF per-role byte bounds.
-- [ ] Run focused tests, then registry tests and Clippy; preserve local directory repository support for offline fixtures.
-- [ ] Commit and push the transport checkpoint.
+- [x] Add RED tests for non-HTTPS URLs, embedded credentials, query/fragment URLs, downgrade redirects, invalid target/hash, and bounded response handling. Redirect and both advertised/streamed size limits are covered by real loopback HTTP tests; existing TUF attack tests cover bad target hash.
+- [x] Use `sigstore-tuf`'s HTTP client with explicit connect/read/overall timeouts, redirects disabled, HTTPS-only validation, and current TUF per-role byte bounds.
+- [x] Run focused tests, registry tests and Clippy; preserve local directory repository support for offline fixtures.
+- [x] Commit and push the transport checkpoint (`1d90053`).
 
 ### Task 6: Atomic installed update state and cache recovery
 
