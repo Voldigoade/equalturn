@@ -43,6 +43,8 @@ The documents separate **verified fact** (a capability or product claim stated b
 
 ## AI ecosystem and registry
 
+- [python-jsonschema 4.26.0 validation documentation](https://python-jsonschema.readthedocs.io/en/v4.26.0/validate/) and its [Draft 2020-12 validator API](https://python-jsonschema.readthedocs.io/en/v4.26.0/api/jsonschema/validators/); the format checker is enabled because JSON Schema `format` is otherwise an annotation. Release/maintenance status checked against the [upstream changelog](https://github.com/python-jsonschema/jsonschema/blob/main/CHANGELOG.rst) on 19 October 2026.
+
 ### Provider/API and gateway documentation
 
 - [OpenAI API reference](https://platform.openai.com/docs/api-reference/introduction)

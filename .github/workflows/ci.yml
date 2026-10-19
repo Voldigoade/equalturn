@@ -53,8 +53,18 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
+      - name: Install registry validator dependency
+        run: |
+          python3 -m venv "$RUNNER_TEMP/equalturn-registry-env"
+          "$RUNNER_TEMP/equalturn-registry-env/bin/python" -m pip install --disable-pip-version-check --requirement requirements-registry.txt
+          echo "$RUNNER_TEMP/equalturn-registry-env/bin" >> "$GITHUB_PATH"
+
       - name: Validate AI research registry
-        run: python3 tools/validate_registry.py
+        run: |
+          python3 tools/validate_registry.py
+          python3 tools/validate_registry_v3.py
+          python3 tools/migrate_registry_v2_to_v3.py --check
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover --start-directory tests --pattern 'test_registry_*.py'
 
       - name: Run Clippy
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings

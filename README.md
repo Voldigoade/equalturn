@@ -14,7 +14,8 @@ Participant signatures prove which session key made a claim and whether the incl
 - [Threat model](docs/threat-model.md)
 - [Windows and Linux enforcement research](docs/enforcement-matrix.md) — future work; no enforcement is implemented
 - [AI ecosystem and registry design](docs/ai-registry.md)
-- [Researched registry v2](registry/registry-v2.json) — research data only
+- [Researched registry v3](registry/registry-v3.json) — research data only; v2 remains as migration history
+- [Registry v3 schema and migration](docs/research/registry-schema-v3.md)
 - [Privacy and report model](docs/privacy.md)
 - [Secret lifecycle and storage limits](docs/secret-lifecycle.md)
 - [Prior art](docs/prior-art.md)
