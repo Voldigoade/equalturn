@@ -315,6 +315,255 @@ async fn missing_key_is_reported_instead_of_regenerating_identity() {
 }
 
 #[tokio::test]
+async fn session_key_uses_a_versioned_platform_protection_envelope() {
+    let (dir, store, profile, identity, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let bytes = fs::read(&key_path).expect("read session key envelope");
+
+    assert_eq!(&bytes[..8], b"ETKEY\0\0\0");
+    assert_eq!(u16::from_be_bytes([bytes[8], bytes[9]]), 2);
+    #[cfg(windows)]
+    assert_eq!(bytes[10], 2, "Windows keys use current-user DPAPI");
+    #[cfg(unix)]
+    assert_eq!(bytes[10], 1, "Unix keys use owner-only file permissions");
+
+    let restored = store
+        .load_identity(profile.session_id, profile.participant_id)
+        .await
+        .expect("load versioned session identity");
+    assert_eq!(restored.public_key(), identity.public_key());
+}
+
+#[tokio::test]
+async fn unsupported_session_key_envelope_version_fails_closed() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut bytes = fs::read(&key_path).expect("read session key envelope");
+    bytes[8..10].copy_from_slice(&u16::MAX.to_be_bytes());
+    fs::write(&key_path, bytes).expect("write unsupported key version");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[tokio::test]
+async fn truncated_session_key_envelope_fails_closed() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let bytes = fs::read(&key_path).expect("read session key envelope");
+    fs::write(&key_path, &bytes[..bytes.len() - 1]).expect("truncate session key envelope");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[tokio::test]
+async fn session_key_store_binding_mismatch_is_reported() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut bytes = fs::read(&key_path).expect("read session key envelope");
+    bytes[43] ^= 0x80;
+    fs::write(&key_path, bytes).expect("change local store binding");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::IdentityDiscontinuity)
+    ));
+}
+
+#[tokio::test]
+async fn legacy_plaintext_key_remains_readable_for_existing_sessions() {
+    use zeroize::Zeroize;
+
+    let (dir, store, profile, identity, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut seed = identity.seed_bytes();
+    let current = fs::read(&key_path).expect("read v2 key for local store binding");
+    let mut legacy = Vec::new();
+    legacy.extend_from_slice(b"ETKEY\0\0\x01");
+    legacy.extend_from_slice(profile.session_id.as_bytes());
+    legacy.extend_from_slice(profile.participant_id.as_bytes());
+    legacy.extend_from_slice(&current[43..59]);
+    legacy.extend_from_slice(&seed);
+    seed.zeroize();
+    fs::write(&key_path, legacy).expect("write legacy key file");
+
+    let restored = store
+        .load_identity(profile.session_id, profile.participant_id)
+        .await
+        .expect("load existing legacy session identity");
+    assert_eq!(restored.public_key(), identity.public_key());
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_dpapi_key_file_hides_seed_and_survives_store_reopen() {
+    use zeroize::Zeroize;
+
+    let (dir, store, profile, identity, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let bytes = fs::read(&key_path).expect("read DPAPI key envelope");
+    let mut seed = identity.seed_bytes();
+    assert_eq!(bytes[10], 2, "key uses current-user DPAPI protection");
+    assert!(
+        !bytes.windows(seed.len()).any(|window| window == seed),
+        "raw Ed25519 seed must not appear in the persisted file"
+    );
+    seed.zeroize();
+
+    store.close().await;
+    let reopened = ClientStore::open(dir.path()).await.expect("reopen store");
+    let restored = reopened
+        .load_identity(profile.session_id, profile.participant_id)
+        .await
+        .expect("restore DPAPI identity under same test user");
+    assert_eq!(restored.public_key(), identity.public_key());
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_dpapi_corrupted_ciphertext_is_rejected() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut bytes = fs::read(&key_path).expect("read DPAPI key envelope");
+    bytes[59 + (bytes.len() - 59) / 2] ^= 0x80;
+    fs::write(&key_path, bytes).expect("write corrupted DPAPI payload");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_dpapi_truncated_key_file_is_rejected() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let bytes = fs::read(&key_path).expect("read DPAPI key envelope");
+    fs::write(&key_path, &bytes[..bytes.len() - 1]).expect("truncate DPAPI key file");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_dpapi_key_is_bound_to_its_session_header() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut bytes = fs::read(&key_path).expect("read DPAPI key envelope");
+    let other_session_id = SessionId::try_new_v4().expect("other session ID");
+    bytes[11..27].copy_from_slice(other_session_id.as_bytes());
+    let other_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        other_session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    fs::write(&other_path, bytes).expect("write key under changed session binding");
+
+    assert!(matches!(
+        store
+            .load_identity(other_session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[cfg(windows)]
+#[tokio::test]
+async fn windows_upgrades_legacy_plaintext_key_before_returning_identity() {
+    use zeroize::Zeroize;
+
+    let (dir, store, profile, identity, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let mut seed = identity.seed_bytes();
+    let mut legacy = Vec::new();
+    legacy.extend_from_slice(b"ETKEY\0\0\x01");
+    legacy.extend_from_slice(profile.session_id.as_bytes());
+    legacy.extend_from_slice(profile.participant_id.as_bytes());
+    legacy.extend_from_slice(&[0_u8; 16]);
+    // Obtain the local store binding from the existing v2 header.
+    let current = fs::read(&key_path).expect("read current key");
+    legacy[40..56].copy_from_slice(&current[43..59]);
+    legacy.extend_from_slice(&seed);
+    seed.zeroize();
+    fs::write(&key_path, legacy).expect("write legacy version 1 key");
+
+    let restored = store
+        .load_identity(profile.session_id, profile.participant_id)
+        .await
+        .expect("load and upgrade legacy key");
+    assert_eq!(restored.public_key(), identity.public_key());
+    let upgraded = fs::read(&key_path).expect("read upgraded key");
+    assert_eq!(&upgraded[..8], b"ETKEY\0\0\0");
+    assert_eq!(u16::from_be_bytes([upgraded[8], upgraded[9]]), 2);
+    assert_eq!(upgraded[10], 2);
+    let mut seed = identity.seed_bytes();
+    let seed_is_present = upgraded
+        .windows(seed.len())
+        .any(|window| window == seed.as_slice());
+    seed.zeroize();
+    assert!(!seed_is_present);
+}
+
+#[tokio::test]
 async fn rejoining_after_key_loss_keeps_prior_participant_evidence() {
     let (dir, store, old_profile, old_identity, relay_identity) = setup().await;
     let old_event = store

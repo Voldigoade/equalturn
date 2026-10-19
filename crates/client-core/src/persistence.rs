@@ -20,13 +20,27 @@ use sqlx::{
 use thiserror::Error;
 use tokio::sync::Mutex;
 use uuid::Uuid;
-use zeroize::Zeroize;
+use zeroize::Zeroizing;
 
 const DATABASE_FILE: &str = "client.sqlite3";
 const KEY_DIRECTORY: &str = "identities";
-const KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\x01";
-const KEY_FILE_BYTES: usize = 8 + 16 + 16 + 16 + 32;
+const LEGACY_KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\x01";
+const KEY_MAGIC: &[u8; 8] = b"ETKEY\0\0\0";
+const KEY_FORMAT_VERSION: u16 = 2;
+#[cfg(unix)]
+const KEY_SCHEME_UNIX_OWNER_ONLY: u8 = 1;
+#[cfg(windows)]
+const KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER: u8 = 2;
+const KEY_HEADER_BYTES: usize = 8 + 2 + 1 + 16 + 16 + 16;
+const KEY_MAX_PAYLOAD_BYTES: usize = 16 * 1024;
+const KEY_MAX_FILE_BYTES: usize = KEY_HEADER_BYTES + KEY_MAX_PAYLOAD_BYTES;
+const LEGACY_KEY_FILE_BYTES: usize = 8 + 16 + 16 + 16 + 32;
+#[cfg(windows)]
+const DPAPI_ENTROPY_DOMAIN: &[u8] = b"Equalturn\0client-key\0v2\0";
 const SCHEMA_VERSION: i64 = 1;
+
+#[cfg(not(any(unix, windows)))]
+compile_error!("Equalturn participant key storage supports Windows and Unix targets only");
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -58,6 +72,8 @@ pub enum ClientError {
     LostKey,
     #[error("session signing key file is corrupt")]
     CorruptKey,
+    #[error("platform key protection failed")]
+    KeyProtection,
     #[error(
         "session key belongs to a different local database; rejoin to establish a new identity"
     )]
@@ -291,14 +307,8 @@ impl ClientStore {
             create_private_directory(parent)?;
         }
 
-        let mut seed = identity.seed_bytes();
-        let mut bytes = Vec::with_capacity(KEY_FILE_BYTES);
-        bytes.extend_from_slice(KEY_MAGIC);
-        bytes.extend_from_slice(session_id.as_bytes());
-        bytes.extend_from_slice(participant_id.as_bytes());
-        bytes.extend_from_slice(&self.store_id);
-        bytes.extend_from_slice(&seed);
-        seed.zeroize();
+        let seed = Zeroizing::new(identity.seed_bytes());
+        let bytes = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
 
         let mut options = OpenOptions::new();
         options.write(true).create_new(true);
@@ -310,19 +320,15 @@ impl ClientStore {
         let mut file = match options.open(&path) {
             Ok(file) => file,
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                bytes.zeroize();
                 return Err(ClientError::ProfileConflict);
             }
             Err(error) => {
-                bytes.zeroize();
                 return Err(ClientError::KeyIo(error));
             }
         };
-        if let Err(error) = file.write_all(&bytes).and_then(|()| file.sync_all()) {
-            bytes.zeroize();
-            return Err(ClientError::KeyIo(error));
-        }
-        bytes.zeroize();
+        file.write_all(&bytes)
+            .and_then(|()| file.sync_all())
+            .map_err(ClientError::KeyIo)?;
         sync_parent_directory(&path)?;
         Ok(identity)
     }
@@ -351,43 +357,37 @@ impl ClientStore {
             return Err(ClientError::CorruptKey);
         }
         validate_key_permissions(&metadata)?;
-        if metadata.len() != KEY_FILE_BYTES as u64 {
+        if !(LEGACY_KEY_FILE_BYTES as u64..=KEY_MAX_FILE_BYTES as u64).contains(&metadata.len()) {
             return Err(ClientError::CorruptKey);
         }
 
         let file = File::open(&path).map_err(ClientError::KeyIo)?;
-        let mut bytes = Vec::with_capacity(KEY_FILE_BYTES);
+        let mut bytes = Zeroizing::new(Vec::with_capacity(KEY_MAX_FILE_BYTES));
         if let Err(error) = file
-            .take((KEY_FILE_BYTES + 1) as u64)
+            .take((KEY_MAX_FILE_BYTES + 1) as u64)
             .read_to_end(&mut bytes)
         {
-            bytes.zeroize();
             return Err(ClientError::KeyIo(error));
         }
-        if bytes.len() != KEY_FILE_BYTES || &bytes[..KEY_MAGIC.len()] != KEY_MAGIC {
-            bytes.zeroize();
+        if bytes.len() as u64 != metadata.len() || bytes.len() > KEY_MAX_FILE_BYTES {
             return Err(ClientError::CorruptKey);
         }
-        if &bytes[8..24] != session_id.as_bytes() {
-            bytes.zeroize();
-            return Err(ClientError::CorruptKey);
-        }
-        if &bytes[24..40] != participant_id.as_bytes() {
-            bytes.zeroize();
-            return Err(ClientError::CorruptKey);
-        }
-        if bytes[40..56] != self.store_id[..] {
-            bytes.zeroize();
-            return Err(ClientError::IdentityDiscontinuity);
-        }
-        let mut seed = [0_u8; 32];
-        seed.copy_from_slice(&bytes[56..88]);
-        bytes.zeroize();
-        let identity = SigningIdentity::from_seed(seed);
+        let legacy = bytes.starts_with(LEGACY_KEY_MAGIC);
+        let seed = if legacy {
+            decode_legacy_key(&bytes, session_id, participant_id, &self.store_id)?
+        } else {
+            decode_key_envelope(&bytes, session_id, participant_id, &self.store_id)?
+        };
+        let identity = SigningIdentity::from_seed(*seed);
         if let Some(profile) = self.load_profile(session_id, participant_id).await?
             && identity.public_key() != profile.participant_public_key
         {
             return Err(ClientError::IdentityMismatch);
+        }
+        #[cfg(windows)]
+        if legacy {
+            let upgraded = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
+            replace_legacy_key_file(&path, &upgraded)?;
         }
         Ok(identity)
     }
@@ -629,6 +629,142 @@ impl ClientStore {
             participant_id.as_uuid()
         ))
     }
+}
+
+fn encode_key_envelope(
+    seed: &[u8; 32],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<Zeroizing<Vec<u8>>, ClientError> {
+    #[cfg(windows)]
+    let scheme = KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER;
+    #[cfg(unix)]
+    let scheme = KEY_SCHEME_UNIX_OWNER_ONLY;
+    #[cfg(not(any(unix, windows)))]
+    return Err(ClientError::KeyProtection);
+
+    let mut envelope = Vec::with_capacity(KEY_HEADER_BYTES + 128);
+    envelope.extend_from_slice(KEY_MAGIC);
+    envelope.extend_from_slice(&KEY_FORMAT_VERSION.to_be_bytes());
+    envelope.push(scheme);
+    envelope.extend_from_slice(session_id.as_bytes());
+    envelope.extend_from_slice(participant_id.as_bytes());
+    envelope.extend_from_slice(store_id);
+
+    let payload = {
+        #[cfg(windows)]
+        {
+            let entropy = key_envelope_entropy(&envelope);
+            Zeroizing::new(
+                equalturn_key_protection::protect_seed(seed, &entropy)
+                    .map_err(|_| ClientError::KeyProtection)?,
+            )
+        }
+        #[cfg(unix)]
+        {
+            Zeroizing::new(seed.to_vec())
+        }
+    };
+    if payload.is_empty() || payload.len() > KEY_MAX_PAYLOAD_BYTES {
+        return Err(ClientError::KeyProtection);
+    }
+    envelope.extend_from_slice(&payload);
+    Ok(Zeroizing::new(envelope))
+}
+
+fn decode_key_envelope(
+    bytes: &[u8],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<Zeroizing<[u8; 32]>, ClientError> {
+    if bytes.len() < KEY_HEADER_BYTES + 1
+        || bytes.len() > KEY_MAX_FILE_BYTES
+        || &bytes[..8] != KEY_MAGIC
+        || u16::from_be_bytes([bytes[8], bytes[9]]) != KEY_FORMAT_VERSION
+    {
+        return Err(ClientError::CorruptKey);
+    }
+    if &bytes[11..27] != session_id.as_bytes() || &bytes[27..43] != participant_id.as_bytes() {
+        return Err(ClientError::CorruptKey);
+    }
+    if bytes[43..59] != store_id[..] {
+        return Err(ClientError::IdentityDiscontinuity);
+    }
+
+    let payload = &bytes[KEY_HEADER_BYTES..];
+    if payload.is_empty() || payload.len() > KEY_MAX_PAYLOAD_BYTES {
+        return Err(ClientError::CorruptKey);
+    }
+    match bytes[10] {
+        #[cfg(unix)]
+        KEY_SCHEME_UNIX_OWNER_ONLY if payload.len() == 32 => {
+            let mut seed = Zeroizing::new([0_u8; 32]);
+            seed.copy_from_slice(payload);
+            Ok(seed)
+        }
+        #[cfg(windows)]
+        KEY_SCHEME_WINDOWS_DPAPI_CURRENT_USER => {
+            let entropy = key_envelope_entropy(&bytes[..KEY_HEADER_BYTES]);
+            equalturn_key_protection::unprotect_seed(payload, &entropy)
+                .map_err(|_| ClientError::CorruptKey)
+        }
+        _ => Err(ClientError::CorruptKey),
+    }
+}
+
+fn decode_legacy_key(
+    bytes: &[u8],
+    session_id: SessionId,
+    participant_id: ParticipantId,
+    store_id: &[u8; 16],
+) -> Result<Zeroizing<[u8; 32]>, ClientError> {
+    if bytes.len() != LEGACY_KEY_FILE_BYTES || &bytes[..8] != LEGACY_KEY_MAGIC {
+        return Err(ClientError::CorruptKey);
+    }
+    if &bytes[8..24] != session_id.as_bytes() || &bytes[24..40] != participant_id.as_bytes() {
+        return Err(ClientError::CorruptKey);
+    }
+    if bytes[40..56] != store_id[..] {
+        return Err(ClientError::IdentityDiscontinuity);
+    }
+    let mut seed = Zeroizing::new([0_u8; 32]);
+    seed.copy_from_slice(&bytes[56..88]);
+    Ok(seed)
+}
+
+#[cfg(windows)]
+fn key_envelope_entropy(header: &[u8]) -> Zeroizing<Vec<u8>> {
+    let mut entropy = Zeroizing::new(Vec::with_capacity(
+        DPAPI_ENTROPY_DOMAIN.len() + header.len(),
+    ));
+    entropy.extend_from_slice(DPAPI_ENTROPY_DOMAIN);
+    entropy.extend_from_slice(header);
+    entropy
+}
+
+#[cfg(windows)]
+fn replace_legacy_key_file(path: &Path, bytes: &[u8]) -> Result<(), ClientError> {
+    let parent = path.parent().ok_or(ClientError::CorruptKey)?;
+    let temporary = parent.join(format!(".key-upgrade-{}.tmp", Uuid::new_v4()));
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    let result = (|| {
+        let mut file = options.open(&temporary).map_err(ClientError::KeyIo)?;
+        file.write_all(bytes).map_err(ClientError::KeyIo)?;
+        file.sync_all().map_err(ClientError::KeyIo)?;
+        fs::rename(&temporary, path).map_err(ClientError::KeyIo)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        match fs::remove_file(&temporary) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(cleanup_error) => return Err(ClientError::KeyIo(cleanup_error)),
+        }
+    }
+    result
 }
 
 fn verify_outbox_rows(
