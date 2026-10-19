@@ -1,0 +1,468 @@
+use equalturn_registry::{RegistryError, verify_repository};
+use jiff::Timestamp;
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use sigstore_crypto::KeyPair;
+use sigstore_tuf::{Key, canonical_json::to_canonical_bytes};
+use std::{fs, path::Path};
+use tempfile::TempDir;
+
+const FAR_FUTURE: &str = "2999-01-01T00:00:00Z";
+const FIXED_NOW: &str = "2026-10-19T12:00:00Z";
+const REGISTRY_BYTES: &[u8] = include_bytes!("../../../registry/registry-v3.json");
+
+trait ResultExpectError<T, E> {
+    fn require_error(self, message: &str) -> E;
+}
+
+impl<T, E> ResultExpectError<T, E> for Result<T, E> {
+    fn require_error(self, message: &str) -> E {
+        match self {
+            Err(error) => error,
+            Ok(_) => panic!("{message}"),
+        }
+    }
+}
+
+struct Signer {
+    key: KeyPair,
+    id: String,
+    value: Value,
+}
+
+impl Signer {
+    fn generate() -> Self {
+        let key = KeyPair::generate_ecdsa_p256().expect("test signing key generation succeeds");
+        let public_pem = key
+            .public_key_der()
+            .expect("test signing key has a public key")
+            .to_pem();
+        let value = json!({
+            "keytype": "ecdsa",
+            "scheme": "ecdsa-sha2-nistp256",
+            "keyval": { "public": public_pem },
+        });
+        let parsed: Key =
+            serde_json::from_value(value.clone()).expect("public key parses as TUF key");
+        let id = parsed.key_id().expect("TUF key ID can be computed");
+        Self { key, id, value }
+    }
+
+    fn sign(&self, signed: &Value) -> Value {
+        let canonical = to_canonical_bytes(signed).expect("TUF canonical JSON is serializable");
+        let signature = self
+            .key
+            .sign(&canonical)
+            .expect("test metadata signing succeeds");
+        json!({ "keyid": self.id, "sig": hex_encode(signature.as_bytes()) })
+    }
+}
+
+fn hex_encode(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut result = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        result.push(HEX[(byte >> 4) as usize] as char);
+        result.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    result
+}
+
+fn envelope(signed: &Value, signers: &[&Signer]) -> Vec<u8> {
+    let signatures: Vec<_> = signers.iter().map(|signer| signer.sign(signed)).collect();
+    serde_json::to_vec(&json!({ "signed": signed, "signatures": signatures }))
+        .expect("TUF metadata envelope serializes")
+}
+
+fn root_signed(signer: &Signer, version: u64) -> Value {
+    let role = json!({ "keyids": [signer.id], "threshold": 1 });
+    json!({
+        "_type": "root",
+        "spec_version": "1.0.0",
+        "version": version,
+        "expires": FAR_FUTURE,
+        "consistent_snapshot": false,
+        "keys": { signer.id.clone(): signer.value.clone() },
+        "roles": {
+            "root": role,
+            "timestamp": role,
+            "snapshot": role,
+            "targets": role,
+        },
+    })
+}
+
+fn root_bytes(signer: &Signer) -> Vec<u8> {
+    let signed = root_signed(signer, 1);
+    envelope(&signed, &[signer])
+}
+
+fn metadata_file(bytes: &[u8], version: u64) -> Value {
+    json!({
+        "version": version,
+        "length": bytes.len(),
+        "hashes": { "sha256": sha256_hex(bytes) },
+    })
+}
+
+fn sha256(bytes: &[u8]) -> [u8; 32] {
+    Sha256::digest(bytes).into()
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    hex_encode(&sha256(bytes))
+}
+
+fn signed_repository_files(
+    signer: &Signer,
+    target: &[u8],
+    version: u64,
+    timestamp_expires: &str,
+) -> Vec<(String, Vec<u8>)> {
+    let targets_signed = json!({
+        "_type": "targets",
+        "spec_version": "1.0.0",
+        "version": version,
+        "expires": FAR_FUTURE,
+        "targets": {
+            "registry-v3.json": {
+                "length": target.len(),
+                "hashes": { "sha256": sha256_hex(target) },
+            }
+        },
+    });
+    let targets = envelope(&targets_signed, &[signer]);
+
+    let snapshot_signed = json!({
+        "_type": "snapshot",
+        "spec_version": "1.0.0",
+        "version": version,
+        "expires": FAR_FUTURE,
+        "meta": { "targets.json": metadata_file(&targets, version) },
+    });
+    let snapshot = envelope(&snapshot_signed, &[signer]);
+
+    let timestamp_signed = json!({
+        "_type": "timestamp",
+        "spec_version": "1.0.0",
+        "version": version,
+        "expires": timestamp_expires,
+        "meta": { "snapshot.json": metadata_file(&snapshot, version) },
+    });
+    let timestamp = envelope(&timestamp_signed, &[signer]);
+
+    vec![
+        ("timestamp.json".into(), timestamp),
+        ("snapshot.json".into(), snapshot),
+        ("targets.json".into(), targets),
+    ]
+}
+
+fn write_repository(directory: &Path, files: &[(String, Vec<u8>)], target: &[u8]) {
+    fs::create_dir_all(directory.join("metadata")).expect("metadata directory is created");
+    fs::create_dir_all(directory.join("targets")).expect("targets directory is created");
+    for (name, bytes) in files {
+        fs::write(directory.join("metadata").join(name), bytes)
+            .expect("signed metadata is written");
+    }
+    fs::write(directory.join("targets/registry-v3.json"), target)
+        .expect("registry target is written");
+}
+
+fn pin(root: &[u8]) -> [u8; 32] {
+    sha256(root)
+}
+
+fn now() -> Timestamp {
+    FIXED_NOW.parse().expect("fixed test timestamp parses")
+}
+
+fn temporary_repository(signer: &Signer, target: &[u8], version: u64) -> TempDir {
+    let directory = tempfile::tempdir().expect("temporary repository directory is created");
+    let files = signed_repository_files(signer, target, version, FAR_FUTURE);
+    write_repository(directory.path(), &files, target);
+    directory
+}
+
+#[tokio::test]
+async fn accepts_a_valid_signed_update_and_persists_the_verified_floor() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let verified = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path().join("trusted").as_path(),
+        now(),
+    )
+    .await
+    .expect("valid repository is accepted");
+
+    assert_eq!(verified.registry().schema_version(), 3);
+    assert_eq!(verified.registry().entries().len(), 131);
+    assert_eq!(verified.trusted_root_version(), 1);
+    assert_eq!(verified.target_sha256(), &sha256(REGISTRY_BYTES));
+    assert!(cache.path().join("trusted/timestamp.json").is_file());
+    assert!(cache.path().join("trusted/snapshot.json").is_file());
+    assert!(cache.path().join("trusted/targets.json").is_file());
+}
+
+#[tokio::test]
+async fn rejects_target_bytes_that_do_not_match_signed_target_metadata() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    fs::write(
+        repository.path().join("targets/registry-v3.json"),
+        b"tampered registry target",
+    )
+    .expect("test mutates target after metadata was signed");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("target hash mismatch must fail");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn rejects_signed_rollback_after_a_newer_version_was_cached() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+    let current = temporary_repository(&signer, REGISTRY_BYTES, 2);
+    verify_repository(
+        current.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .expect("newer signed version is accepted");
+
+    let rollback = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let error = verify_repository(
+        rollback.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("older signed version must not pass the persisted floor");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn rejects_expired_metadata_without_waiting_for_wall_clock_time() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = tempfile::tempdir().expect("repository directory is created");
+    let files = signed_repository_files(&signer, REGISTRY_BYTES, 1, "2000-01-01T00:00:00Z");
+    write_repository(repository.path(), &files, REGISTRY_BYTES);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("expired timestamp must fail at the injected time");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn accepts_a_root_rotation_authorized_by_both_old_and_new_roots() {
+    let old_signer = Signer::generate();
+    let new_signer = Signer::generate();
+    let bootstrap_root = root_bytes(&old_signer);
+    let repository = tempfile::tempdir().expect("repository directory is created");
+    let mut files = signed_repository_files(&new_signer, REGISTRY_BYTES, 2, FAR_FUTURE);
+    let next_root = root_signed(&new_signer, 2);
+    let next_root_bytes = envelope(&next_root, &[&old_signer, &new_signer]);
+    files.push(("2.root.json".into(), next_root_bytes));
+    write_repository(repository.path(), &files, REGISTRY_BYTES);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let verified = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .expect("dual-authorized root rotation is accepted");
+
+    assert_eq!(verified.trusted_root_version(), 2);
+}
+
+#[tokio::test]
+async fn rejects_an_unauthorized_remote_root_rotation() {
+    let trusted_signer = Signer::generate();
+    let attacker_signer = Signer::generate();
+    let bootstrap_root = root_bytes(&trusted_signer);
+    let repository = temporary_repository(&trusted_signer, REGISTRY_BYTES, 1);
+    let attacker_root = root_signed(&attacker_signer, 2);
+    fs::write(
+        repository.path().join("metadata/2.root.json"),
+        envelope(&attacker_root, &[&attacker_signer]),
+    )
+    .expect("attacker root is placed in repository");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("untrusted root is not authorized by the bootstrap root");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn rejects_mix_and_match_snapshot_metadata() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let first = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let second = temporary_repository(&signer, b"different but valid target bytes", 1);
+    fs::copy(
+        second.path().join("metadata/snapshot.json"),
+        first.path().join("metadata/snapshot.json"),
+    )
+    .expect("test mixes separately signed repository metadata");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        first.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("timestamp pin must reject a snapshot from another repository state");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn rejects_malformed_metadata_safely() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    fs::write(
+        repository.path().join("metadata/timestamp.json"),
+        b"{not json",
+    )
+    .expect("test replaces timestamp with malformed bytes");
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("malformed signed metadata must fail closed");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn attacker_cannot_replace_remote_root_and_all_metadata_after_bootstrap() {
+    let trusted_signer = Signer::generate();
+    let attacker_signer = Signer::generate();
+    let trusted_root = root_bytes(&trusted_signer);
+    let repository = temporary_repository(&attacker_signer, REGISTRY_BYTES, 1);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &trusted_root,
+        &pin(&trusted_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("attacker metadata cannot replace the independently pinned bootstrap root");
+
+    assert!(matches!(error, RegistryError::Tuf));
+}
+
+#[tokio::test]
+async fn rejects_a_validly_signed_but_semantically_invalid_registry_target() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let invalid_registry = br#"{"schema_version":3,"registry_version":"1.0.0","last_updated":"2026-10-19","purpose":"research_only","entries":[],"unexpected":true}"#;
+    let repository = temporary_repository(&signer, invalid_registry, 1);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+
+    let error = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("TUF authenticity does not bypass registry semantic validation");
+
+    assert!(matches!(error, RegistryError::Schema(_)));
+}
+
+#[tokio::test]
+async fn rejects_tampered_cached_metadata_instead_of_using_it_as_a_floor() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 2);
+    let cache = tempfile::tempdir().expect("cache directory is created");
+    let trusted_cache = cache.path().join("trusted");
+    verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        &trusted_cache,
+        now(),
+    )
+    .await
+    .expect("signed metadata is cached");
+    fs::write(trusted_cache.join("timestamp.json"), b"tampered cache")
+        .expect("test corrupts local metadata cache");
+
+    let retry = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        &trusted_cache,
+        now(),
+    )
+    .await;
+
+    assert!(
+        retry.is_ok(),
+        "fresh signed repository metadata repairs the cache"
+    );
+}

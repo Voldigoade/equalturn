@@ -38,6 +38,7 @@ uuid = { version = "1.28.0", features = ["serde", "v4"] }
 jsonschema = { version = "=0.59.0", default-features = false }
 jiff = "=0.2.38"
 sigstore-tuf = { version = "=0.15.0", default-features = false, features = ["aws-lc-rs"] }
+sigstore-crypto = { version = "=0.15.0", default-features = false, features = ["aws-lc-rs"] }
 tempfile = "3.27.0"
 
 [workspace.lints.rust]

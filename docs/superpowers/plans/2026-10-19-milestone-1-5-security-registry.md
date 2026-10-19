@@ -59,6 +59,21 @@ Every stage below has a focused verification, self-review, one or more coherent 
 19. **Documentation and contributor safety.** Update product/architecture/privacy/registry docs and exact workflow commands. Add `docs/enforcement-test-safety.md` and link it from `AGENTS.md`, `CONTRIBUTING.md`, and the implementation plan. Future Linux enforcement tests require namespaces/VMs; Windows requires Sandbox/VM where the primitive is represented, otherwise a disposable VM. Isolation unavailable means skip and report; never fall back to host enforcement.
 20. **Full review and integration.** Review all branch diff and sensitive-code searches; run every final local check including PostgreSQL and `cargo audit`; inspect Linux and Windows Actions for the branch; only then fast-forward `main` to the verified commit, inspect final main CI, and confirm clean branch/workspace state.
 
+## Checkpoint notes
+
+### Stage 15 — TUF attack tests
+
+The tests build temporary repositories with ephemeral P-256 test keys and exercise the production `sigstore-tuf` verifier through its local-directory transport. They cover a valid update, target-byte tampering, cached rollback, expired timestamp metadata at an injected time, dual-authorized root rotation, unauthorized rotation, snapshot mix-and-match, malformed metadata, bootstrap-root substitution, semantically invalid signed target data, and recovery from corrupted cached metadata. No private test key is persisted outside the test process or committed.
+
+Focused verification observed before the Stage 15 checkpoint:
+
+- `CARGO_BUILD_JOBS=1 cargo test -p equalturn-registry --test tuf_attacks --offline` — 11 passed.
+- `CARGO_BUILD_JOBS=1 cargo test -p equalturn-registry --offline` — 18 passed across unit, registry integration, and TUF attack tests.
+- `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry --all-targets --all-features --offline -- -D warnings` — passed.
+- `cargo fmt --all -- --check` — passed after the final test edits.
+
+The bootstrap substitution test keeps the independently pinned bootstrap root and presents a repository fully signed by an attacker key; it is rejected by the actual TUF verifier. A separate earlier registry test covers a root whose supplied bytes fail the independent bootstrap digest pin.
+
 ## Completion evidence
 
 No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.

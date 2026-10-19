@@ -17,6 +17,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+sigstore-crypto.workspace = true
 tokio.workspace = true
 
 [lints]
