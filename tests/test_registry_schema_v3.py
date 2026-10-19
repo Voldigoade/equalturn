@@ -1,6 +1,7 @@
 import copy
 import importlib.util
 import json
+import sys
 import unittest
 from pathlib import Path
 
@@ -8,10 +9,14 @@ from jsonschema import Draft202012Validator
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TOOLS = ROOT / "tools"
+if str(TOOLS) not in sys.path:
+    sys.path.insert(0, str(TOOLS))
 SPEC = importlib.util.spec_from_file_location(
     "equalturn_registry_v3_validator", ROOT / "tools" / "validate_registry_v3.py"
 )
 VALIDATOR_MODULE = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = VALIDATOR_MODULE
 SPEC.loader.exec_module(VALIDATOR_MODULE)
 
 
@@ -26,12 +31,14 @@ class RegistrySchemaV3Tests(unittest.TestCase):
         )
 
     def test_checked_in_v3_registry_passes_draft_2020_12_validation(self):
+        result = VALIDATOR_MODULE.validate()
+
+        self.assertEqual(result.errors, [])
+        self.assertEqual(result.warnings, [])
+        self.assertEqual(result.entry_count, len(self.registry["entries"]))
         self.assertEqual(
-            VALIDATOR_MODULE.validate(),
-            (
-                len(self.registry["entries"]),
-                sum(len(entry["indicators"]) for entry in self.registry["entries"]),
-            ),
+            result.indicator_count,
+            sum(len(entry["indicators"]) for entry in self.registry["entries"]),
         )
 
     def test_researched_identifiers_cover_major_local_and_editor_surfaces(self):

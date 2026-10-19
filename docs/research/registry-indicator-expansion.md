@@ -1,7 +1,7 @@
 # Registry indicator expansion review
 
 **Review date:** 19 October 2026  
-**Registry:** schema v3, semantic version 0.4.0, 131 product/provider records, 158 source records, 84 indicators.  
+**Registry:** schema v3, semantic version 0.4.0, 131 product/provider records, 152 source records, 84 indicators.
 **Scope:** researched identifiers only. This work did not add detection or enforcement code.
 
 ## What changed
@@ -44,4 +44,4 @@ The three local listener ports (`8080`, `11434`, and `1337`) are explicitly `uns
 
 V2 remains an immutable historical migration input. V3 is now independently curated because useful indicator classifications and newly researched identifiers cannot be losslessly regenerated from v2. The v2-to-v3 importer remains covered by deterministic migration tests, but CI no longer compares the current v3 dataset byte-for-byte with a fresh migration. Future releases must derive from the curated v3 source and a reviewed deterministic target-generation step.
 
-Schema validation currently proves the v3 document's structure only. The next validator stage adds semantic checks for normalization, provenance, duplicate values, dates, and actionability/false-positive contradictions. Neither validator can prove a source page's truth or that an indicator is safe to enforce.
+The v3 validator checks Draft 2020-12 structure, semantic normalization, provenance resolution, duplicate values and sources, dates, and actionability/false-positive consistency. It also reports visible warnings separately from errors. Six repeated source URL/check-date pairs were merged into one source record per entry during this validation stage, preserving their distinct assessment text and redirecting the affected indicators. Neither validator can prove a source page's truth or that an indicator is safe to enforce.

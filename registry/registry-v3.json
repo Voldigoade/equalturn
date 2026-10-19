@@ -1770,13 +1770,7 @@
           "id": "source-1",
           "url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "`llama-server` default `127.0.0.1:8080` documented; configurable and shared by unrelated apps."
-        },
-        {
-          "id": "source-2",
-          "url": "https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "llama.cpp server documentation names the `llama-server` executable and describes configurable server behavior."
+          "indicator_assessment": "`llama-server` default `127.0.0.1:8080` documented; configurable and shared by unrelated apps. llama.cpp server documentation names the `llama-server` executable and describes configurable server behavior."
         },
         {
           "id": "source-3",
@@ -1815,7 +1809,7 @@
             "server"
           ],
           "scope": "llama.cpp inference server executable name",
-          "source_id": "source-2",
+          "source_id": "source-1",
           "verified_on": "2026-10-19",
           "confidence": "high",
           "actionability": "advisory",
@@ -2736,13 +2730,7 @@
           "id": "source-1",
           "url": "https://localai.io/docs/index.html",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Bind address/port configurable; no fixed process signature is a reliable identity."
-        },
-        {
-          "id": "source-2",
-          "url": "https://localai.io/docs/index.html",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "LocalAI official quick start documents the `localai/localai` container image and its AI runtime role."
+          "indicator_assessment": "Bind address/port configurable; no fixed process signature is a reliable identity. LocalAI official quick start documents the `localai/localai` container image and its AI runtime role."
         }
       ],
       "indicators": [
@@ -2757,7 +2745,7 @@
             "server"
           ],
           "scope": "LocalAI Docker Hub image repository",
-          "source_id": "source-2",
+          "source_id": "source-1",
           "verified_on": "2026-10-19",
           "confidence": "high",
           "actionability": "advisory",
@@ -3304,13 +3292,7 @@
           "id": "source-2",
           "url": "https://github.com/mistralai/mistral-vibe",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Mistral-maintained Vibe repository documents `uv tool install mistral-vibe` and `pip install mistral-vibe`."
-        },
-        {
-          "id": "source-3",
-          "url": "https://github.com/mistralai/mistral-vibe",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "Mistral Vibe upstream documentation names `vibe` as its interactive and programmatic CLI command."
+          "indicator_assessment": "Mistral-maintained Vibe repository documents `uv tool install mistral-vibe` and `pip install mistral-vibe`. Mistral Vibe upstream documentation names `vibe` as its interactive and programmatic CLI command."
         }
       ],
       "indicators": [
@@ -3324,7 +3306,7 @@
             "cli"
           ],
           "scope": "Documented Mistral Vibe CLI command name",
-          "source_id": "source-3",
+          "source_id": "source-2",
           "verified_on": "2026-10-19",
           "confidence": "medium",
           "actionability": "advisory",
@@ -3502,13 +3484,7 @@
           "id": "source-1",
           "url": "https://github.com/MoonshotAI/kimi-code/blob/main/apps/kimi-code/README.md",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Moonshot-maintained repository documents the npm package and global installation command for Kimi Code CLI."
-        },
-        {
-          "id": "source-2",
-          "url": "https://github.com/MoonshotAI/kimi-code/blob/main/apps/kimi-code/README.md",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "Kimi Code CLI upstream quick start documents `kimi --version` and launching the `kimi` command."
+          "indicator_assessment": "Moonshot-maintained repository documents the npm package and global installation command for Kimi Code CLI. Kimi Code CLI upstream quick start documents `kimi --version` and launching the `kimi` command."
         }
       ],
       "indicators": [
@@ -3522,7 +3498,7 @@
             "cli"
           ],
           "scope": "Documented Kimi Code CLI command name",
-          "source_id": "source-2",
+          "source_id": "source-1",
           "verified_on": "2026-10-19",
           "confidence": "medium",
           "actionability": "advisory",
@@ -3866,13 +3842,7 @@
           "id": "source-1",
           "url": "https://docs.openwebui.com/getting-started/quick-start/",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Container publish port can differ from app port; configurable provider connections."
-        },
-        {
-          "id": "source-2",
-          "url": "https://docs.openwebui.com/getting-started/quick-start/",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "Open WebUI official quick start documents the GHCR image and describes a self-hosted interface with configurable model/provider connections."
+          "indicator_assessment": "Container publish port can differ from app port; configurable provider connections. Open WebUI official quick start documents the GHCR image and describes a self-hosted interface with configurable model/provider connections."
         }
       ],
       "indicators": [
@@ -3887,7 +3857,7 @@
             "server"
           ],
           "scope": "Open WebUI GHCR image repository",
-          "source_id": "source-2",
+          "source_id": "source-1",
           "verified_on": "2026-10-19",
           "confidence": "high",
           "actionability": "advisory",
@@ -5073,13 +5043,7 @@
           "id": "source-2",
           "url": "https://docs.vllm.ai/en/latest/cli/index.html",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "vLLM CLI documentation describes the vllm command and its distribution."
-        },
-        {
-          "id": "source-3",
-          "url": "https://docs.vllm.ai/en/latest/cli/index.html",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "vLLM CLI documentation names `vllm` and documents `vllm serve` for the OpenAI-compatible server."
+          "indicator_assessment": "vLLM CLI documentation describes the vllm command and its distribution. vLLM CLI documentation names `vllm` and documents `vllm serve` for the OpenAI-compatible server."
         }
       ],
       "indicators": [
@@ -5093,7 +5057,7 @@
             "server"
           ],
           "scope": "vLLM command-line executable name",
-          "source_id": "source-3",
+          "source_id": "source-2",
           "verified_on": "2026-10-19",
           "confidence": "medium",
           "actionability": "advisory",
