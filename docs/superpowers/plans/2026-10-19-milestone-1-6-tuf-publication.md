@@ -60,10 +60,10 @@
 - Consumes: Task 1 upstream review.
 - Produces: explicit non-production/production role policy, key custody, expiration, recovery, and fail-closed bootstrap decisions.
 
-- [ ] Document an honest root/targets threshold based on actual independent maintainers; do not claim independent custody where it does not exist.
-- [ ] Choose separate staging-only signers and document online signer options and risks without provisioning paid infrastructure.
-- [ ] Specify production publication URL, initial-root out-of-band verification, role expiry/rotation, incident response, and the exact manual signer gate.
-- [ ] Verify no instruction or artifact includes private production material; review policy against the Mission's root-custody boundary.
+- [x] Document an honest root/targets threshold based on actual independent maintainers; do not claim independent custody where it does not exist.
+- [x] Choose separate staging-only signers and document online signer options and risks without provisioning paid infrastructure.
+- [x] Specify production publication URL, initial-root out-of-band verification, role expiry/rotation, incident response, and the exact manual signer gate.
+- [x] Verify no instruction or artifact includes private production material; review policy against the Mission's root-custody boundary.
 - [ ] Commit and push the policy checkpoint.
 
 ### Task 3: Isolated staging TUF repository

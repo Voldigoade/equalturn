@@ -44,5 +44,8 @@ The public `Voldigoade/equalturn-registry` repository exists but has no initiali
 
 ## Checkpoint updates
 
+- Stage 1 baseline/research checkpoint: commit `3b122d2` (`docs: record milestone 1.6 TUF publication baseline`) was pushed to `work/milestone-1.6-tuf-publication`. The CI workflow only runs on pushes to `main` or pull requests targeting `main`, so this docs-only branch push did not start CI.
+- Stage 2 production policy is under review. No production or staging private key has been generated, and no root is trusted by the client.
+
 Milestone 1.6 stage commits, pushed branch heads, publication artifacts, CI runs, and live staging verification will be recorded here as each checkpoint completes. This file is not evidence of publication until the relevant observed values are added.
 
