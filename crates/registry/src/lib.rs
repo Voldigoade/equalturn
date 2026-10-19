@@ -1,3 +1,4 @@
+mod http_repository;
 mod json;
 mod model;
 mod repository;
@@ -9,7 +10,9 @@ pub use model::{
     RegistryError, RegistrySurface, RegistryVerificationStatus, Relationship, RelationshipKind,
     Source, TufFailureKind,
 };
-pub use trust::{VerifiedRegistry, verify_bootstrap_root, verify_repository};
+pub use trust::{
+    VerifiedRegistry, verify_bootstrap_root, verify_https_repository, verify_repository,
+};
 
 /// The v3 registry schema limits a registry target to four mebibytes.
 pub const REGISTRY_MAX_BYTES: usize = 4 * 1024 * 1024;
