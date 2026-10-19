@@ -1,6 +1,6 @@
 # Trusted registry distribution: tooling decision
 
-**Decision date:** 19 October 2026  
+**Decision date:** 19 October 2026
 **Status:** local Rust verification and offline CLI are implemented; repository publication, production root ceremony, and signed release remain uninitialized. No signed production registry is available.
 
 ## Decision

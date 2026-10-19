@@ -1,6 +1,6 @@
 # Registry indicator expansion review
 
-**Review date:** 19 October 2026  
+**Review date:** 19 October 2026
 **Registry:** schema v3, semantic version 0.4.0, 131 product/provider records, 152 source records, 84 indicators.
 **Scope:** researched identifiers only. This work did not add detection or enforcement code.
 
