@@ -288,7 +288,7 @@ async fn corrupt_database_fails_with_explicit_error() {
 #[tokio::test]
 async fn deleted_database_with_a_surviving_key_is_not_reinitialized() {
     let (dir, store, _profile, _, _) = setup().await;
-    drop(store);
+    store.close().await;
     fs::remove_file(dir.path().join("client.sqlite3")).expect("remove database");
     let result = ClientStore::open(dir.path()).await;
     assert!(matches!(result, Err(ClientError::DatabaseLost)));

@@ -142,6 +142,11 @@ impl ClientStore {
         })
     }
 
+    /// Closes SQLite connections and waits until the database files are released.
+    pub async fn close(self) {
+        self.pool.close().await;
+    }
+
     pub async fn save_profile(&self, profile: &SessionProfile) -> Result<(), ClientError> {
         validate_profile(profile)?;
         let value = serde_json::to_vec(profile).map_err(|_| ClientError::CorruptEvidence)?;
