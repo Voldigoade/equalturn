@@ -107,7 +107,7 @@ Verification observed on pushed commit `47a9ac1f1b556e68cc75cc6d8271bc89b52b77e3
 
 - GitHub Actions run [39308964800](https://github.com/Voldigoade/equalturn/actions/runs/39308964800) — Linux/PostgreSQL passed, including the new deterministic target step; Windows workspace build/tests passed.
 - `git diff --check` — passed before commit.
-- The deterministic builder could not be run in the local environment because its Python 3.14 installation has neither `pip` nor `venv`, and the bundled Python lacks `jsonschema`. The exact two-build command ran successfully in the GitHub Linux job after installing the pinned `requirements-registry.txt` dependencies.
+- At the Stage 18 checkpoint, the deterministic builder could not be run in the system Python 3.14 or the bundled Python because neither had `jsonschema`. Stage 20 later used the cached pinned dependency through `uv`, ran two local builds, compared them byte-for-byte, checked the generated target, and validated it successfully; the earlier environment limitation is historical only.
 
 ### Stage 19 — documentation and contributor safety
 
