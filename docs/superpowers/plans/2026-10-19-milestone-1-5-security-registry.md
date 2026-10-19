@@ -123,4 +123,21 @@ Stage 19 review observed:
 
 ## Completion evidence
 
-No stage is complete because it compiles. Final acceptance requires the user's complete Milestone 1.5 checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.
+### Stage 20 — whole-branch review and final verification
+
+Reviewed the complete branch delta from the reviewed Milestone 1 baseline, including storage, protocol, relay, reports, registry parsing and validation, TUF verification, CLI, CI, and documentation. The final review found two Markdown hard-break spaces that failed `git diff --check`; they were removed in `9c691dc`. Searches found no `TODO`, `FIXME`, or `HACK` markers. The unsafe Rust is confined to the narrow Windows DPAPI wrapper. `expect` calls found in the reviewed source are test setup/assertion paths; no user-controlled request path relies on a panic. The tracked `.env.example` contains only replacement placeholders, and no private keys, database files, credentials, or machine-local paths are committed. No host enforcement was run.
+
+Observed local verification on the reviewed branch:
+
+- `cargo fmt --all -- --check` — passed.
+- `CARGO_BUILD_JOBS=1 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` — passed.
+- `CARGO_BUILD_JOBS=1 cargo test --workspace --locked --quiet` — 116 test cases passed. The two PostgreSQL-backed relay scenarios skip their database sections locally because `TEST_DATABASE_URL` is unset and this host has no PostgreSQL service or Docker; they run against the CI PostgreSQL service instead.
+- `python3 tools/validate_registry.py` — passed: 129 v2 entries, 132 provenance records, 58 structured indicators.
+- `uv run --offline --with-requirements requirements-registry.txt python tools/validate_registry_v3.py` — passed: 131 v3 entries, 84 indicators, zero warnings. `python -m unittest discover -s tests -p 'test_registry*.py'` — 46 tests passed.
+- Two independent release builds matched at 152,438 bytes with SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`; `--check` and validation of the generated target passed.
+- `cargo audit --file Cargo.lock` could not run locally because `cargo-audit` is not installed. The pinned CI workflow installs cargo-audit 0.22.2 and passed its audit step.
+- GitHub Actions run [39310078281](https://github.com/Voldigoade/equalturn/actions/runs/39310078281) on `9c691dc` passed both Windows tests and Linux/PostgreSQL checks, including the database-backed workspace tests, registry validation, reproducible target check, and dependency audit.
+
+At this branch checkpoint, final main integration and its CI result had not yet occurred.
+
+Milestone 1.5 completion requires the user's full acceptance checklist: baseline behavior preserved; key protections and storage invariants; registry v3/schema/semantic validation and provenance; deterministic target; tested mature TUF bootstrap/update/attacks; offline CLI; no enforcement coupling; no secrets; fmt/clippy/full PostgreSQL tests/registry validation/TUF tests/audit; observed Linux and Windows CI and final main CI; clean committed repository. Any unavailable external service or key-ceremony requirement must be identified precisely after all independent implementation work is complete.
