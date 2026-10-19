@@ -1,0 +1,22 @@
+[package]
+name = "equalturn"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Equalturn pseudonymous competition integrity client"
+
+[dependencies]
+clap.workspace = true
+equalturn-client-core = { path = "../../crates/client-core" }
+equalturn-protocol = { path = "../../crates/protocol" }
+equalturn-report = { path = "../../crates/report" }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing-subscriber.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,17 @@
+[package]
+name = "equalturn-relay"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Equalturn PostgreSQL-backed relay service"
+
+[dependencies]
+clap.workspace = true
+equalturn-relay-core = { path = "../../crates/relay-core" }
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[lints]
+workspace = true

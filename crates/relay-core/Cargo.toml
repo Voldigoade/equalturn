@@ -1,0 +1,32 @@
+[package]
+name = "equalturn-relay-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "PostgreSQL-backed HTTP and WebSocket session relay for Equalturn"
+
+[dependencies]
+axum.workspace = true
+axum-server.workspace = true
+equalturn-protocol = { path = "../protocol" }
+equalturn-report = { path = "../report" }
+futures-util.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+getrandom = "0.4.3"
+zeroize = "1.9.1"
+
+[dev-dependencies]
+equalturn-client-core = { path = "../client-core" }
+reqwest.workspace = true
+tokio-tungstenite.workspace = true
+
+[lints]
+workspace = true

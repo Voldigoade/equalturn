@@ -1,0 +1,40 @@
+[workspace]
+resolver = "3"
+members = [
+  "crates/protocol",
+  "crates/client-core",
+  "crates/relay-core",
+  "crates/report",
+  "apps/equalturn",
+  "apps/equalturn-relay",
+]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.94"
+version = "0.1.0"
+
+[workspace.dependencies]
+axum = { version = "0.8.9", features = ["ws"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls"] }
+clap = { version = "4.5.60", features = ["derive", "env"] }
+futures-util = "0.3.31"
+reqwest = { version = "0.13.5", default-features = false, features = ["json", "rustls"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11"
+sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "tls-rustls-ring", "postgres", "sqlite-bundled", "uuid", "migrate", "macros", "json"] }
+thiserror = "2.0.21"
+tokio = { version = "1.52.1", features = ["full"] }
+tokio-tungstenite = { version = "0.30.0", features = ["rustls-tls-webpki-roots"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter", "fmt", "json"] }
+url = "2.5.8"
+uuid = { version = "1.28.0", features = ["serde", "v4"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"

@@ -1,0 +1,25 @@
+[package]
+name = "equalturn-client-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Local session identity, durable event queue, and relay client for Equalturn"
+
+[dependencies]
+equalturn-protocol = { path = "../protocol" }
+equalturn-report = { path = "../report" }
+futures-util.workspace = true
+reqwest.workspace = true
+sqlx.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tokio-tungstenite.workspace = true
+url.workspace = true
+uuid.workspace = true
+zeroize = "1.9.1"
+
+[lints]
+workspace = true
