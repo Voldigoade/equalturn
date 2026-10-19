@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "registry_version": "0.2.0",
+  "registry_version": "0.2.1",
   "last_updated": "2026-10-19",
   "purpose": "research_only",
   "entries": [
@@ -258,7 +258,7 @@
         "id": "mistral-ai",
         "name": "Mistral AI"
       },
-      "product": "Vibe (formerly Le Chat)",
+      "product": "Vibe Chat / Vibe Work (formerly Le Chat)",
       "categories": [
         "hosted_chat",
         "multimodal",
@@ -272,20 +272,55 @@
       "sources": [
         {
           "id": "source-1",
+          "url": "https://help.mistral.ai/en/articles/682992-le-chat-is-now-vibe",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Mistral says Le Chat is now Vibe Chat/Work and retains `chat.mistral.ai`; this hostname does not identify Vibe Code use or user intent."
+        },
+        {
+          "id": "source-2",
           "url": "https://mistral.ai/products/vibe/",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "`chat.mistral.ai` is the product host; the product page now brands the experience Vibe and says it was formerly Le Chat. This does not identify API use or intent."
+          "indicator_assessment": "First-party overview distinguishes Vibe Work/Chat from the separate Vibe Code surface."
         }
       ],
       "indicators": [
         {
           "kind": "domain_exact",
           "value": "chat.mistral.ai",
-          "scope": "Hosted Mistral Vibe/Le Chat product hostname",
+          "scope": "Hosted Mistral Vibe Chat/Work product hostname",
           "source_id": "source-1",
-          "limitations": "`chat.mistral.ai` is the product host; the product page now brands the experience Vibe and says it was formerly Le Chat. This does not identify API use or intent."
+          "limitations": "`chat.mistral.ai` is the product host; this does not identify Vibe Code, API use, or user intent."
         }
       ],
+      "relationships": []
+    },
+    {
+      "id": "mistral-vibe-code",
+      "provider": {
+        "id": "mistral-ai",
+        "name": "Mistral AI"
+      },
+      "product": "Vibe Code",
+      "categories": [
+        "coding_assistant",
+        "ide_assistant",
+        "cli_agent"
+      ],
+      "surfaces": [
+        "cli",
+        "ide",
+        "web"
+      ],
+      "status": "observed",
+      "sources": [
+        {
+          "id": "source-1",
+          "url": "https://docs.mistral.ai/vibe/code/overview",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "First-party docs identify CLI, IDE integrations, and web agent surfaces; no stable package/process identifier is asserted here."
+        }
+      ],
+      "indicators": [],
       "relationships": []
     },
     {
@@ -539,25 +574,20 @@
       "relationships": []
     },
     {
-      "id": "minimax-agent-minimax-code-suite",
+      "id": "minimax-agent",
       "provider": {
         "id": "minimax",
         "name": "MiniMax"
       },
-      "product": "Agent / MiniMax Code suite",
+      "product": "MiniMax Agent",
       "categories": [
         "hosted_chat",
         "multimodal",
-        "regional_provider",
-        "coding_assistant",
-        "desktop_app",
-        "cli_agent"
+        "regional_provider"
       ],
       "surfaces": [
         "web",
-        "desktop",
-        "mobile",
-        "cli"
+        "mobile"
       ],
       "status": "observed",
       "sources": [
@@ -569,12 +599,6 @@
         },
         {
           "id": "source-2",
-          "url": "https://agent.minimax.io/download",
-          "checked_on": "2026-10-19",
-          "indicator_assessment": "Official product material documents MiniMax Code desktop and CLI surfaces, but supplies no stable package or process identifier."
-        },
-        {
-          "id": "source-3",
           "url": "https://chat.minimax.io/",
           "checked_on": "2026-10-19",
           "indicator_assessment": "The legacy chat.minimax.io URL redirected to a regional MiniMax Agent host at the check date; regional redirects may vary."
@@ -586,9 +610,37 @@
           "value": "agent.minimax.io",
           "scope": "Hosted MiniMax Agent web product hostname",
           "source_id": "source-1",
-          "limitations": "`agent.minimax.io` is a current web product host; `chat.minimax.io` redirects to a regional MiniMax Agent host. Official product material also documents MiniMax Code desktop and CLI surfaces, but supplies no stable package/process identifier. API and enterprise endpoints are separate."
+          "limitations": "`agent.minimax.io` is a current web product host; `chat.minimax.io` redirects to a regional MiniMax Agent host. API and enterprise endpoints are separate."
         }
       ],
+      "relationships": []
+    },
+    {
+      "id": "minimax-code",
+      "provider": {
+        "id": "minimax",
+        "name": "MiniMax"
+      },
+      "product": "MiniMax Code",
+      "categories": [
+        "coding_assistant",
+        "desktop_app",
+        "cli_agent"
+      ],
+      "surfaces": [
+        "desktop",
+        "cli"
+      ],
+      "status": "observed",
+      "sources": [
+        {
+          "id": "source-1",
+          "url": "https://agent.minimax.io/download",
+          "checked_on": "2026-10-19",
+          "indicator_assessment": "Official product material documents MiniMax Code desktop and CLI surfaces, but supplies no stable package or process identifier."
+        }
+      ],
+      "indicators": [],
       "relationships": []
     },
     {
@@ -942,8 +994,7 @@
       },
       "product": "Gamma AI",
       "categories": [
-        "multimodal",
-        "hosted_chat"
+        "multimodal"
       ],
       "surfaces": [
         "web"
@@ -976,8 +1027,7 @@
       },
       "product": "Magic Studio",
       "categories": [
-        "multimodal",
-        "hosted_chat"
+        "multimodal"
       ],
       "surfaces": [
         "web",
@@ -2434,9 +2484,9 @@
       "sources": [
         {
           "id": "source-1",
-          "url": "https://docs.cursor.com/en/cli/reference/authentication",
+          "url": "https://docs.cursor.com/en/cli/overview",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "`cursor-agent` is documented but rename/rebuild/custom endpoint bypasses process matching."
+          "indicator_assessment": "The first-party CLI overview shows the `cursor-agent` command; rename/rebuild/custom endpoint bypasses process matching."
         }
       ],
       "indicators": [
@@ -3275,13 +3325,13 @@
         "cli",
         "web"
       ],
-      "status": "unknown",
+      "status": "observed",
       "sources": [
         {
           "id": "source-1",
           "url": "https://github.com/GreyDGL/PentestGPT",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Repository/product entry exists; project maintenance/status requires re-check. No stable network indicator asserted."
+          "indicator_assessment": "The current official repository describes an AI-powered autonomous penetration-testing/CTF agent and documents current CLI and provider integrations. Existence is observed; this does not establish a stable network or process indicator, or guarantee future maintenance."
         }
       ],
       "indicators": [],
@@ -3626,18 +3676,10 @@
           "id": "source-1",
           "url": "https://huggingface.co/docs/text-generation-inference/basic_tutorials/consuming_tgi",
           "checked_on": "2026-10-19",
-          "indicator_assessment": "Docs show serving on configured port (example 8080); detection candidate, not identity."
+          "indicator_assessment": "The docs use port 8080 in configurable launch/consumer examples; this ubiquitous port alone does not identify TGI and is not retained as an indicator."
         }
       ],
-      "indicators": [
-        {
-          "kind": "tcp_listener",
-          "value": "8080",
-          "scope": "Documented TGI example serving port 8080; bind address and configuration are not specified as invariant.",
-          "source_id": "source-1",
-          "limitations": "Docs show serving on configured port (example 8080); detection candidate, not identity."
-        }
-      ],
+      "indicators": [],
       "relationships": []
     },
     {
