@@ -425,6 +425,248 @@ async fn legacy_plaintext_key_remains_readable_for_existing_sessions() {
     assert_eq!(restored.public_key(), identity.public_key());
 }
 
+#[cfg(unix)]
+#[tokio::test]
+async fn session_key_symlink_is_rejected_without_opening_its_target() {
+    use std::os::unix::fs::symlink;
+
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let target_path = dir.path().join("saved-key");
+    fs::rename(&key_path, &target_path).expect("move key out of the expected name");
+    symlink(&target_path, &key_path).expect("replace expected key with symlink");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+    assert!(target_path.exists(), "the symlink target remains untouched");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn non_regular_session_key_file_is_rejected() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    fs::remove_file(&key_path).expect("remove regular key file");
+    fs::create_dir(&key_path).expect("create directory at key path");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn oversized_session_key_file_is_rejected_before_reading_payload() {
+    let (dir, store, profile, _, _) = setup().await;
+    let key_path = dir.path().join("identities").join(format!(
+        "{}-{}.key",
+        profile.session_id.as_uuid(),
+        profile.participant_id.as_uuid()
+    ));
+    let oversized = vec![0_u8; 8 + 2 + 1 + 16 + 16 + 16 + 16 * 1024 + 1];
+    fs::write(&key_path, oversized).expect("replace key with an oversized file");
+
+    assert!(matches!(
+        store
+            .load_identity(profile.session_id, profile.participant_id)
+            .await,
+        Err(ClientError::CorruptKey)
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn concurrent_create_new_calls_never_replace_the_winning_identity() {
+    let dir = TempDir::new();
+    let store = std::sync::Arc::new(ClientStore::open(dir.path()).await.expect("open store"));
+    let session_id = SessionId::try_new_v4().expect("session id");
+    let participant_id = ParticipantId::try_new_v4().expect("participant id");
+    let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
+    let runtime = tokio::runtime::Handle::current();
+    let first_store = std::sync::Arc::clone(&store);
+    let first_gate = std::sync::Arc::clone(&gate);
+    let first_runtime = runtime.clone();
+    let first = tokio::task::spawn_blocking(move || {
+        first_gate.wait();
+        first_runtime.block_on(first_store.create_identity(session_id, participant_id))
+    });
+    let second_store = std::sync::Arc::clone(&store);
+    let second_gate = std::sync::Arc::clone(&gate);
+    let second = tokio::task::spawn_blocking(move || {
+        second_gate.wait();
+        runtime.block_on(second_store.create_identity(session_id, participant_id))
+    });
+    let first = first.await.expect("first creation task");
+    let second = second.await.expect("second creation task");
+
+    let winner = match (first, second) {
+        (Ok(identity), Err(ClientError::ProfileConflict))
+        | (Err(ClientError::ProfileConflict), Ok(identity)) => identity,
+        _ => panic!("create_new returned an unexpected race result"),
+    };
+    let restored = store
+        .load_identity(session_id, participant_id)
+        .await
+        .expect("load winning create_new identity");
+    assert_eq!(restored.public_key(), winner.public_key());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn data_directory_symlink_is_rejected() {
+    use std::os::unix::fs::symlink;
+
+    let parent = TempDir::new();
+    let actual_directory = parent.path().join("actual");
+    fs::create_dir(&actual_directory).expect("create actual data directory");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&actual_directory, fs::Permissions::from_mode(0o700))
+            .expect("restrict actual data directory");
+    }
+    let symlink_path = parent.path().join("linked-store");
+    symlink(&actual_directory, &symlink_path).expect("create data-directory symlink");
+
+    assert!(matches!(
+        ClientStore::open(&symlink_path).await,
+        Err(ClientError::InsecureDataDirectory)
+    ));
+    let trailing_separator = PathBuf::from(format!("{}/", symlink_path.display()));
+    assert!(matches!(
+        ClientStore::open(&trailing_separator).await,
+        Err(ClientError::InsecureDataDirectory)
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn key_creation_uses_the_opened_data_directory_after_path_replacement() {
+    use std::os::unix::fs::symlink;
+
+    let parent = TempDir::new();
+    let data_path = parent.path().join("store");
+    fs::create_dir(&data_path).expect("create data directory");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&data_path, fs::Permissions::from_mode(0o700))
+            .expect("restrict data directory");
+    }
+    let store = ClientStore::open(&data_path).await.expect("open store");
+    let moved_path = parent.path().join("opened-store");
+    let replacement_path = parent.path().join("replacement-store");
+    fs::create_dir(&replacement_path).expect("create replacement directory");
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&replacement_path, fs::Permissions::from_mode(0o700))
+            .expect("restrict replacement directory");
+    }
+    fs::rename(&data_path, &moved_path).expect("move opened directory");
+    symlink(&replacement_path, &data_path).expect("replace original path with symlink");
+
+    let session_id = SessionId::try_new_v4().expect("session id");
+    let participant_id = ParticipantId::try_new_v4().expect("participant id");
+    store
+        .create_identity(session_id, participant_id)
+        .await
+        .expect("create through the pinned directory descriptor");
+
+    let expected = moved_path.join("identities").join(format!(
+        "{}-{}.key",
+        session_id.as_uuid(),
+        participant_id.as_uuid()
+    ));
+    assert!(expected.is_file());
+    assert!(!replacement_path.join("identities").exists());
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn identity_directory_symlink_is_rejected() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let dir = TempDir::new();
+    let store = ClientStore::open(dir.path()).await.expect("open store");
+    let outside = dir.path().join("outside-identities");
+    fs::create_dir(&outside).expect("create target directory");
+    fs::set_permissions(&outside, fs::Permissions::from_mode(0o700))
+        .expect("restrict target directory");
+    symlink(&outside, dir.path().join("identities")).expect("create identity-directory symlink");
+
+    assert!(matches!(
+        store
+            .create_identity(
+                SessionId::try_new_v4().expect("session id"),
+                ParticipantId::try_new_v4().expect("participant id")
+            )
+            .await,
+        Err(ClientError::InsecureKeyPermissions)
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn identity_directory_with_group_access_is_rejected() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = TempDir::new();
+    let store = ClientStore::open(dir.path()).await.expect("open store");
+    let identities = dir.path().join("identities");
+    fs::create_dir(&identities).expect("create identity directory");
+    fs::set_permissions(&identities, fs::Permissions::from_mode(0o750))
+        .expect("broaden identity directory permissions");
+
+    assert!(matches!(
+        store
+            .create_identity(
+                SessionId::try_new_v4().expect("session id"),
+                ParticipantId::try_new_v4().expect("participant id")
+            )
+            .await,
+        Err(ClientError::InsecureKeyPermissions)
+    ));
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn lost_database_check_does_not_follow_identity_directory_symlink() {
+    use std::os::unix::fs::{PermissionsExt, symlink};
+
+    let (dir, store, _, _, _) = setup().await;
+    store.close().await;
+    fs::remove_file(dir.path().join("client.sqlite3")).expect("remove client database");
+    fs::rename(
+        dir.path().join("identities"),
+        dir.path().join("saved-identities"),
+    )
+    .expect("move original identities directory");
+    let outside = dir.path().join("outside-identities");
+    fs::create_dir(&outside).expect("create outside directory");
+    fs::set_permissions(&outside, fs::Permissions::from_mode(0o700))
+        .expect("restrict outside directory");
+    symlink(&outside, dir.path().join("identities")).expect("link identities to outside");
+
+    assert!(matches!(
+        ClientStore::open(dir.path()).await,
+        Err(ClientError::InsecureKeyPermissions)
+    ));
+}
+
 #[cfg(windows)]
 #[tokio::test]
 async fn windows_dpapi_key_file_hides_seed_and_survives_store_reopen() {
@@ -637,6 +879,24 @@ async fn rejoining_after_key_loss_keeps_prior_participant_evidence() {
         .await
         .expect("new participant has independent chain");
     assert_eq!(new_event.body.sequence, 1);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn missing_data_directory_is_created_owner_only() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let parent = TempDir::new();
+    let data_dir = parent.path().join("new-store");
+    let _store = ClientStore::open(&data_dir)
+        .await
+        .expect("create a private data directory");
+    let mode = fs::metadata(&data_dir)
+        .expect("data directory metadata")
+        .permissions()
+        .mode()
+        & 0o777;
+    assert_eq!(mode, 0o700);
 }
 
 #[cfg(unix)]

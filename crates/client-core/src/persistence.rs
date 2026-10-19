@@ -1,7 +1,11 @@
+#[cfg(not(unix))]
+use std::fs::OpenOptions;
+#[cfg(windows)]
+use std::path::PathBuf;
 use std::{
-    fs::{self, File, OpenOptions},
+    fs::{self, File},
     io::{self, Read, Write},
-    path::{Path, PathBuf},
+    path::Path,
     time::Duration,
 };
 
@@ -106,7 +110,10 @@ pub enum ClientError {
 
 pub struct ClientStore {
     pool: sqlx::SqlitePool,
+    #[cfg(windows)]
     data_dir: PathBuf,
+    #[cfg(unix)]
+    data_dir_handle: File,
     store_id: [u8; 16],
     write_gate: Mutex<()>,
 }
@@ -114,6 +121,9 @@ pub struct ClientStore {
 impl ClientStore {
     pub async fn open(data_dir: impl AsRef<Path>) -> Result<Self, ClientError> {
         let data_dir = data_dir.as_ref().to_path_buf();
+        #[cfg(unix)]
+        let data_dir_handle = prepare_data_directory(&data_dir)?;
+        #[cfg(not(unix))]
         prepare_data_directory(&data_dir)?;
         let database_path = data_dir.join(DATABASE_FILE);
         let database_exists = database_path.exists();
@@ -123,7 +133,12 @@ impl ClientStore {
                 .len()
                 == 0;
 
-        if fresh_database && has_session_keys(&data_dir.join(KEY_DIRECTORY))? {
+        #[cfg(unix)]
+        let keys_survive_database = fresh_database && has_session_keys(&data_dir_handle)?;
+        #[cfg(not(unix))]
+        let keys_survive_database =
+            fresh_database && has_session_keys(&data_dir.join(KEY_DIRECTORY))?;
+        if keys_survive_database {
             return Err(if database_exists {
                 ClientError::CorruptDatabase
             } else {
@@ -152,7 +167,10 @@ impl ClientStore {
 
         Ok(Self {
             pool,
+            #[cfg(windows)]
             data_dir,
+            #[cfg(unix)]
+            data_dir_handle,
             store_id,
             write_gate: Mutex::new(()),
         })
@@ -302,7 +320,11 @@ impl ClientStore {
             return Err(ClientError::InvalidProfile);
         }
         let identity = SigningIdentity::generate()?;
+        #[cfg(not(unix))]
         let path = self.key_path(session_id, participant_id);
+        #[cfg(unix)]
+        let key_directory = open_identity_directory(&self.data_dir_handle, true)?;
+        #[cfg(not(unix))]
         if let Some(parent) = path.parent() {
             create_private_directory(parent)?;
         }
@@ -310,26 +332,30 @@ impl ClientStore {
         let seed = Zeroizing::new(identity.seed_bytes());
         let bytes = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
 
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
         #[cfg(unix)]
+        persist_new_unix_key(
+            &key_directory,
+            &identity_key_name(session_id, participant_id),
+            &bytes,
+        )?;
+        #[cfg(not(unix))]
         {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
+            let mut options = OpenOptions::new();
+            options.write(true).create_new(true);
+            let mut file = match options.open(&path) {
+                Ok(file) => file,
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                    return Err(ClientError::ProfileConflict);
+                }
+                Err(error) => {
+                    return Err(ClientError::KeyIo(error));
+                }
+            };
+            file.write_all(&bytes)
+                .and_then(|()| file.sync_all())
+                .map_err(ClientError::KeyIo)?;
+            sync_parent_directory(&path)?;
         }
-        let mut file = match options.open(&path) {
-            Ok(file) => file,
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
-                return Err(ClientError::ProfileConflict);
-            }
-            Err(error) => {
-                return Err(ClientError::KeyIo(error));
-            }
-        };
-        file.write_all(&bytes)
-            .and_then(|()| file.sync_all())
-            .map_err(ClientError::KeyIo)?;
-        sync_parent_directory(&path)?;
         Ok(identity)
     }
 
@@ -345,13 +371,39 @@ impl ClientStore {
         {
             return Err(ClientError::InvalidProfile);
         }
-        let path = self.key_path(session_id, participant_id);
-        let metadata = match fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                return Err(ClientError::LostKey);
+        #[cfg(unix)]
+        let (file, metadata) = {
+            let directory = open_identity_directory(&self.data_dir_handle, false)?;
+            let name = identity_key_name(session_id, participant_id);
+            let descriptor = rustix::fs::openat(
+                &directory,
+                name.as_str(),
+                rustix::fs::OFlags::RDONLY
+                    | rustix::fs::OFlags::CLOEXEC
+                    | rustix::fs::OFlags::NOFOLLOW
+                    | rustix::fs::OFlags::NONBLOCK,
+                rustix::fs::Mode::empty(),
+            )
+            .map_err(map_existing_key_open_error)?;
+            let file = File::from(descriptor);
+            let metadata = file.metadata().map_err(ClientError::KeyIo)?;
+            (file, metadata)
+        };
+        #[cfg(windows)]
+        let (file, metadata) = {
+            let path = self.key_path(session_id, participant_id);
+            let metadata = match fs::symlink_metadata(&path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    return Err(ClientError::LostKey);
+                }
+                Err(error) => return Err(ClientError::KeyIo(error)),
+            };
+            if !metadata.file_type().is_file() {
+                return Err(ClientError::CorruptKey);
             }
-            Err(error) => return Err(ClientError::KeyIo(error)),
+            let file = File::open(&path).map_err(ClientError::KeyIo)?;
+            (file, metadata)
         };
         if !metadata.file_type().is_file() {
             return Err(ClientError::CorruptKey);
@@ -361,7 +413,6 @@ impl ClientStore {
             return Err(ClientError::CorruptKey);
         }
 
-        let file = File::open(&path).map_err(ClientError::KeyIo)?;
         let mut bytes = Zeroizing::new(Vec::with_capacity(KEY_MAX_FILE_BYTES));
         if let Err(error) = file
             .take((KEY_MAX_FILE_BYTES + 1) as u64)
@@ -386,6 +437,7 @@ impl ClientStore {
         }
         #[cfg(windows)]
         if legacy {
+            let path = self.key_path(session_id, participant_id);
             let upgraded = encode_key_envelope(&seed, session_id, participant_id, &self.store_id)?;
             replace_legacy_key_file(&path, &upgraded)?;
         }
@@ -622,6 +674,7 @@ impl ClientStore {
         Ok(())
     }
 
+    #[cfg(windows)]
     fn key_path(&self, session_id: SessionId, participant_id: ParticipantId) -> PathBuf {
         self.data_dir.join(KEY_DIRECTORY).join(format!(
             "{}-{}.key",
@@ -983,6 +1036,7 @@ fn uuid_string(value: Uuid) -> String {
     value.hyphenated().to_string()
 }
 
+#[cfg(not(unix))]
 fn has_session_keys(directory: &Path) -> Result<bool, ClientError> {
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
@@ -1002,50 +1056,208 @@ fn has_session_keys(directory: &Path) -> Result<bool, ClientError> {
     Ok(false)
 }
 
-fn create_private_directory(directory: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        let mut builder = fs::DirBuilder::new();
-        builder.recursive(true).mode(0o700);
-        builder.create(directory).map_err(ClientError::KeyIo)?;
-        let metadata = fs::symlink_metadata(directory).map_err(ClientError::KeyIo)?;
-        let mode = metadata.permissions().mode() & 0o777;
-        if !metadata.file_type().is_dir() || mode & 0o077 != 0 || mode & 0o700 != 0o700 {
-            return Err(ClientError::InsecureKeyPermissions);
+#[cfg(unix)]
+fn has_session_keys(data_directory: &File) -> Result<bool, ClientError> {
+    let directory = match open_identity_directory(data_directory, false) {
+        Ok(directory) => directory,
+        Err(ClientError::LostKey) => return Ok(false),
+        Err(error) => return Err(error),
+    };
+    let entries = rustix::fs::Dir::read_from(&directory)
+        .map_err(|error| ClientError::KeyIo(io::Error::from(error)))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| ClientError::KeyIo(io::Error::from(error)))?;
+        if entry.file_name().to_bytes().ends_with(b".key") {
+            return Ok(true);
         }
     }
-    #[cfg(not(unix))]
+    Ok(false)
+}
+
+#[cfg(not(unix))]
+fn create_private_directory(directory: &Path) -> Result<(), ClientError> {
     fs::create_dir_all(directory).map_err(ClientError::KeyIo)?;
     Ok(())
 }
 
-fn prepare_data_directory(directory: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
+#[cfg(unix)]
+fn prepare_data_directory(directory: &Path) -> Result<File, ClientError> {
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+    use std::path::PathBuf;
+
+    let normalized_directory = directory
+        .components()
+        .fold(PathBuf::new(), |mut path, part| {
+            path.push(part.as_os_str());
+            path
+        });
+    let mut builder = fs::DirBuilder::new();
+    builder.recursive(true).mode(0o700);
+    builder
+        .create(&normalized_directory)
+        .map_err(ClientError::KeyIo)?;
+    let descriptor = rustix::fs::open(
+        &normalized_directory,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::DIRECTORY
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| {
+        if matches!(error, rustix::io::Errno::LOOP | rustix::io::Errno::NOTDIR) {
+            ClientError::InsecureDataDirectory
+        } else {
+            ClientError::KeyIo(io::Error::from(error))
+        }
+    })?;
+    let directory = File::from(descriptor);
+    let metadata = directory.metadata().map_err(ClientError::KeyIo)?;
+    if !metadata.is_dir()
+        || !unix_owner_and_mode_are_private(
+            metadata.uid(),
+            rustix::process::geteuid().as_raw(),
+            metadata.mode(),
+            0o700,
+        )
     {
-        use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-        if !directory.exists() {
-            let mut builder = fs::DirBuilder::new();
-            builder.recursive(true).mode(0o700);
-            builder.create(directory).map_err(ClientError::KeyIo)?;
-        }
-        let metadata = fs::symlink_metadata(directory).map_err(ClientError::KeyIo)?;
-        let mode = metadata.permissions().mode() & 0o777;
-        if !metadata.file_type().is_dir() || mode & 0o077 != 0 || mode & 0o700 != 0o700 {
-            return Err(ClientError::InsecureDataDirectory);
-        }
+        return Err(ClientError::InsecureDataDirectory);
     }
-    #[cfg(not(unix))]
+    Ok(directory)
+}
+
+#[cfg(not(unix))]
+fn prepare_data_directory(directory: &Path) -> Result<(), ClientError> {
     fs::create_dir_all(directory).map_err(ClientError::KeyIo)?;
     Ok(())
+}
+
+#[cfg(unix)]
+fn open_identity_directory(data_directory: &File, create: bool) -> Result<File, ClientError> {
+    use rustix::io::Errno;
+
+    if create {
+        match rustix::fs::mkdirat(data_directory, KEY_DIRECTORY, rustix::fs::Mode::from(0o700)) {
+            Ok(()) => data_directory.sync_all().map_err(ClientError::KeyIo)?,
+            Err(Errno::EXIST) => {}
+            Err(error) => return Err(ClientError::KeyIo(io::Error::from(error))),
+        }
+    }
+
+    let descriptor = rustix::fs::openat(
+        data_directory,
+        KEY_DIRECTORY,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::DIRECTORY
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::empty(),
+    )
+    .map_err(|error| match error {
+        Errno::NOENT if !create => ClientError::LostKey,
+        Errno::LOOP | Errno::NOTDIR => ClientError::InsecureKeyPermissions,
+        other => ClientError::KeyIo(io::Error::from(other)),
+    })?;
+    let directory = File::from(descriptor);
+    let metadata = directory.metadata().map_err(ClientError::KeyIo)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if !metadata.is_dir()
+            || !unix_owner_and_mode_are_private(
+                metadata.uid(),
+                rustix::process::geteuid().as_raw(),
+                metadata.mode(),
+                0o700,
+            )
+        {
+            return Err(ClientError::InsecureKeyPermissions);
+        }
+    }
+    Ok(directory)
+}
+
+#[cfg(unix)]
+fn persist_new_unix_key(directory: &File, name: &str, bytes: &[u8]) -> Result<(), ClientError> {
+    use rustix::io::Errno;
+
+    let descriptor = rustix::fs::openat(
+        directory,
+        name,
+        rustix::fs::OFlags::WRONLY
+            | rustix::fs::OFlags::CREATE
+            | rustix::fs::OFlags::EXCL
+            | rustix::fs::OFlags::CLOEXEC
+            | rustix::fs::OFlags::NOFOLLOW,
+        rustix::fs::Mode::from(0o600),
+    )
+    .map_err(|error| {
+        if error == Errno::EXIST {
+            ClientError::ProfileConflict
+        } else {
+            ClientError::KeyIo(io::Error::from(error))
+        }
+    })?;
+    let mut file = File::from(descriptor);
+    let operation = rustix::fs::fchmod(&file, rustix::fs::Mode::from(0o600))
+        .map_err(io::Error::from)
+        .map_err(ClientError::KeyIo)
+        .and_then(|()| {
+            let metadata = file.metadata().map_err(ClientError::KeyIo)?;
+            validate_key_permissions(&metadata)?;
+            file.write_all(bytes).map_err(ClientError::KeyIo)?;
+            file.sync_all().map_err(ClientError::KeyIo)?;
+            directory.sync_all().map_err(ClientError::KeyIo)
+        });
+    if let Err(error) = operation {
+        drop(file);
+        let cleanup = rustix::fs::unlinkat(directory, name, rustix::fs::AtFlags::empty())
+            .map_err(io::Error::from)
+            .and_then(|()| directory.sync_all());
+        return match cleanup {
+            Ok(()) => Err(error),
+            Err(cleanup_error) => Err(ClientError::KeyIo(cleanup_error)),
+        };
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn identity_key_name(session_id: SessionId, participant_id: ParticipantId) -> String {
+    format!("{}-{}.key", session_id.as_uuid(), participant_id.as_uuid())
+}
+
+#[cfg(unix)]
+fn map_existing_key_open_error(error: rustix::io::Errno) -> ClientError {
+    match error {
+        rustix::io::Errno::NOENT => ClientError::LostKey,
+        rustix::io::Errno::LOOP | rustix::io::Errno::ISDIR => ClientError::CorruptKey,
+        other => ClientError::KeyIo(io::Error::from(other)),
+    }
+}
+
+#[cfg(unix)]
+fn unix_owner_and_mode_are_private(
+    owner: u32,
+    expected_owner: u32,
+    mode: u32,
+    required_owner_bits: u32,
+) -> bool {
+    owner == expected_owner
+        && mode & 0o7077 == 0
+        && mode & required_owner_bits == required_owner_bits
 }
 
 fn validate_key_permissions(metadata: &fs::Metadata) -> Result<(), ClientError> {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        let mode = metadata.permissions().mode() & 0o777;
-        if mode & 0o077 != 0 || mode & 0o400 == 0 {
+        use std::os::unix::fs::MetadataExt;
+        if !unix_owner_and_mode_are_private(
+            metadata.uid(),
+            rustix::process::geteuid().as_raw(),
+            metadata.mode(),
+            0o400,
+        ) {
             return Err(ClientError::InsecureKeyPermissions);
         }
     }
@@ -1054,15 +1266,8 @@ fn validate_key_permissions(metadata: &fs::Metadata) -> Result<(), ClientError> 
     Ok(())
 }
 
-fn sync_parent_directory(path: &Path) -> Result<(), ClientError> {
-    #[cfg(unix)]
-    if let Some(parent) = path.parent() {
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(ClientError::KeyIo)?;
-    }
-    #[cfg(not(unix))]
-    let _ = path;
+#[cfg(not(unix))]
+fn sync_parent_directory(_path: &Path) -> Result<(), ClientError> {
     Ok(())
 }
 
@@ -1082,4 +1287,18 @@ fn map_sqlx(error: sqlx::Error) -> ClientError {
         }
     }
     ClientError::Storage(error)
+}
+
+#[cfg(all(test, unix))]
+mod unix_key_permission_tests {
+    use super::unix_owner_and_mode_are_private;
+
+    #[test]
+    fn private_storage_requires_the_expected_owner_and_no_group_or_other_access() {
+        assert!(unix_owner_and_mode_are_private(1000, 1000, 0o700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1001, 1000, 0o700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o740, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o4700, 0o700));
+        assert!(!unix_owner_and_mode_are_private(1000, 1000, 0o600, 0o700));
+    }
 }
