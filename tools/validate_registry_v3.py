@@ -63,18 +63,23 @@ def read_json_bounded(path: Path, max_bytes: int) -> object:
             contents = source.read(max_bytes + 1)
     except OSError as error:
         raise InputError("E_FILE_READ", f"cannot read {path}: {error.strerror or error}") from error
+    return parse_json_bytes(contents, str(path), max_bytes)
+
+
+def parse_json_bytes(contents: bytes, source: str, max_bytes: int) -> object:
+    """Decode bounded UTF-8 JSON and reject duplicate object keys."""
     if len(contents) > max_bytes:
-        raise InputError("E_FILE_TOO_LARGE", f"{path} exceeds the {max_bytes}-byte limit")
+        raise InputError("E_FILE_TOO_LARGE", f"{source} exceeds the {max_bytes}-byte limit")
     try:
         text = contents.decode("utf-8", errors="strict")
     except UnicodeDecodeError as error:
-        raise InputError("E_UTF8_INVALID", f"{path} is not valid UTF-8 at byte {error.start}") from error
+        raise InputError("E_UTF8_INVALID", f"{source} is not valid UTF-8 at byte {error.start}") from error
     try:
         return json.loads(text, object_pairs_hook=_unique_object)
     except DuplicateJsonKeyError as error:
-        raise InputError("E_JSON_DUPLICATE_KEY", f"{path}: {error}") from error
+        raise InputError("E_JSON_DUPLICATE_KEY", f"{source}: {error}") from error
     except (json.JSONDecodeError, RecursionError) as error:
-        raise InputError("E_JSON_INVALID", f"{path} is malformed JSON") from error
+        raise InputError("E_JSON_INVALID", f"{source} is malformed JSON") from error
 
 
 def _format_path(parts: Any) -> str:

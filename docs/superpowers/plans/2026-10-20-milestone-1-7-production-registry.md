@@ -70,8 +70,8 @@ Each task is complete only after its relevant focused tests pass and its code/do
 ### Task 3 — production and staging client boundary regression
 
 - Reviewed `apps/equalturn/src/commands/registry.rs`: production operations fail before root parsing, state-directory creation, or repository/network access; staging requires an explicitly supplied root plus an independent SHA-256 pin. No implementation refactor was justified while the production anchor is intentionally absent.
-- Strengthened the CLI integration regression to install a genuinely signed staging snapshot, then attempt production update and status with the staging root, repository, and shared data directory. Both production operations remain fail-closed, and no production-profile state is created. Invalid staging input also leaves existing staging state intact.
-- Focused verification: `cargo fmt --all -- --check`; `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn --all-targets --all-features --locked -- -D warnings`; `CARGO_BUILD_JOBS=1 cargo test -p equalturn --locked --test registry_cli` (4 passed). An initial test invocation used a sandbox-read-only home cache temp path; rerun with disk-backed `target/tmp` succeeded. No production root or private key was generated.
+- Strengthened the CLI integration regression to install a genuinely signed staging snapshot, then attempt production update and status with the staging root, repository, URL, and shared data directory. Both production operations remain fail-closed, and no production-profile state is created. Invalid staging input also leaves existing staging state intact.
+- Focused verification: `cargo fmt --all -- --check`; `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn --all-targets --all-features --locked -- -D warnings`; `CARGO_BUILD_JOBS=1 cargo test -p equalturn --locked --test registry_cli` (4 passed); the production/staging isolation case was rerun after adding the URL assertion and passed. An initial test invocation used a sandbox-read-only home cache temp path; rerun with disk-backed `target/tmp` succeeded. No production root or private key was generated.
 - This is an integration-test-only hardening checkpoint; production remains deliberately unavailable pending the separate root/custody gate.
 
 ### Task 4 — client-side signing-role rotation rehearsal
@@ -79,6 +79,13 @@ Each task is complete only after its relevant focused tests pass and its code/do
 - Added a TUF verifier rehearsal that rotates the targets role from the bootstrap key to a distinct target key under a dual-authorized root v2. The client accepts target metadata signed by the new authorized key, then rejects a later target manifest signed only by the retired key. The fixture uses `sigstore-tuf`'s canonical JSON and signing primitives; no project-owned TUF signature implementation was added.
 - Focused verification: `cargo fmt --all -- --check`; `CARGO_BUILD_JOBS=1 cargo test -p equalturn-registry --locked --test tuf_attacks` (24 passed); `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry --all-targets --all-features --locked -- -D warnings`.
 - Scope limit: this proves the Equalturn client's TUF role transition behavior, not an operational TUF-on-CI renewal ceremony. The disposable staging repository remains fixed-content Pages publication; production signer, root, online provider, and renewal path remain gated on owner custody and account-level decisions.
+
+### Task 4b — source-commit target reproducibility
+
+- Extended the deterministic target builder with `--source-commit FULL_COMMIT_ID`. It reads the registry and Draft 2020-12 schema from that exact commit, ignores Git replacement refs, rejects short refs and user-overridden source paths, verifies each Git object is a bounded blob before parsing, and compares only deterministic target bytes. This demonstrates source-to-target reproducibility without treating reproducibility as release authorization.
+- Added temporary-Git-repository tests proving uncommitted working-tree edits and replacement refs cannot change the selected commit's output, target mutation is rejected, oversized Git blobs are rejected, malformed/empty identifiers fail closed, and commit-source mode cannot be combined with alternate source paths.
+- Focused verification: offline pinned Python environment; release-tool tests (10 passed); full `test_registry_*.py` suite (50 passed); v2 validator (129 entries, 132 provenance records, 58 indicators); v3 validator (131 entries, 84 indicators, 0 warnings); deterministic target build and exact-commit comparison (152,438 bytes, source `0eb74c67fe9ec2517d400b3f8817435ba22b8108`); `cargo fmt --all -- --check`; `git diff --check`.
+- Added contributor-facing command and scope note to README and `docs/registry-trust.md`. No production metadata, signer, credential, or repository setting changed.
 
 #### Staging-only GitHub workflow permission state
 

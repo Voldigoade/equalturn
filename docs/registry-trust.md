@@ -72,7 +72,7 @@ The staging root and signatures are not production trust and must not be embedde
 | Threat | What TUF / policy contains | Residual risk and response |
 | --- | --- | --- |
 | GitHub or mirror compromise | A mirror cannot change signed metadata or target bytes without a trusted signing threshold; the eventual root pin is distributed out of band. | Hosting can deny service or replay metadata only until expiry. Restore hosting and publish fresh metadata; compare target hashes to reviewed source. |
-| Malicious registry PR or compromised source maintainer | CI validation and registry review precede an independent multi-signer target event once the required production custodian roster exists. | A malicious but correctly signed entry remains possible; correct it in a reviewed release. TUF does not evaluate indicator truth or block safety. |
+| Malicious registry PR or compromised source maintainer | CI validation and registry review precede an explicit TUF targets-role signing event. The recommended initial proposal is 1-of-1 under one accountable custodian; any higher threshold must reflect genuinely independent custody. | A malicious but correctly signed entry remains possible; correct it in a reviewed release. TUF does not evaluate indicator truth or block safety. |
 | Root or targets signer compromise | A pinned root and role separation prevent a targets-only key from changing root policy. | The recommended initial 1-of-1 proposal has no multi-party compromise tolerance: a stolen root signer can replace role keys, and a stolen targets signer can authorize a malicious registry. Recover through authorized root rotation; communicate root replacement out of band. |
 | Snapshot or timestamp key compromise | Separate online roles cannot sign top-level targets under the proposed role separation. | They can disrupt metadata freshness or cause denial of service; revoke/rotate the affected role through authorized metadata. |
 | Freeze / rollback / mix-and-match | Expiry, monotonically increasing metadata versions, snapshot hashes/lengths, consistent snapshots, and persistent client metadata state reject stale or inconsistent state. | A client that never checks for updates cannot learn a new release exists; show the last check and expiry. If rollback state is lost or unreadable, fail closed rather than silently resetting the floor. |
@@ -92,7 +92,10 @@ Reproduce and compare a target with:
 ```sh
 python3 tools/build_registry_release.py --output dist/registry-v3.json
 python3 tools/build_registry_release.py --output dist/registry-v3.json --check
+python3 tools/build_registry_release.py --source-commit FULL_COMMIT_ID --output downloaded/registry-v3.json --check
 ```
+
+For the last command, first obtain the published target through the trusted TUF update path and save it at the indicated local path. `--source-commit` reads both the registry and its schema from the specified full Git commit object, ignores Git replacement refs, bounds the Git blobs before parsing, and compares the deterministic target bytes with the supplied target. It requires that commit to exist in the local repository. This verifies byte reproducibility only; it does not establish that the commit was reviewed, authorized for release, or signed by a TUF role.
 
 The checked-in snapshot currently emits 152,438 bytes with SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`. On 19 October 2026, two independent builds matched byte-for-byte and the generated target passed the v3 schema/semantic validator. CI repeats the generation-and-compare check in its dedicated hardening step.
 
