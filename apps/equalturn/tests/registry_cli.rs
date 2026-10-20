@@ -227,6 +227,34 @@ fn production_profile_fails_closed_and_staging_never_discovers_its_root() {
         "a staging root and repository must not initialize production state"
     );
 
+    let production_url = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args([
+            "registry",
+            "update",
+            "--profile",
+            "production",
+            "--url",
+            "https://voldigoade.github.io/equalturn-registry-staging/",
+        ])
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert!(!production_url.status.success());
+    assert!(
+        String::from_utf8_lossy(&production_url.stderr)
+            .contains("production registry trust not initialized")
+    );
+    assert!(
+        !data_dir.join("registry/profiles/production").exists(),
+        "the staging publication URL must not initialize production state"
+    );
+
     let production_status = Command::new(env!("CARGO_BIN_EXE_equalturn"))
         .args(["registry", "status", "--profile", "production"])
         .arg("--root")
