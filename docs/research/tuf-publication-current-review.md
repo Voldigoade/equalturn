@@ -25,6 +25,10 @@ Root and targets remain human-controlled roles and are never placed in CI. Snaps
 
 The production client remains fail-closed until the production root is initialized through TUF-on-CI, independently verified by the existing Rust client, and its exact public bytes and digest are embedded in an Equalturn release. Production trust must never fall back to staging. Public registry signatures prove publisher authorization and byte integrity, not that an indicator is true, complete, current, or safe to enforce.
 
+## Online KMS cost snapshot
+
+Checked 20 October 2026 against the providers' official list-price pages. AWS customer-managed KMS keys cost $1 per key-month; separate snapshot and timestamp keys therefore start at $2/month, with API charges and asymmetric signing excluded from the 20,000-request free tier. Google Cloud KMS software-protected RSA 3072/ECC versions are $0.06 per active version-month plus $0.03 per 10,000 cryptographic operations; two active versions start at $0.12/month before operations. Region/account-specific costs and unrelated services are excluded. Azure Key Vault pricing depends on region and key type and was not reliably summarized here. These numbers inform, but do not decide, the owner’s provider choice; verify current prices before provisioning.
+
 ## Workflow review and limitations
 
 The current production `online-sign.yml` has empty workflow-level permissions. Its online-sign job requests `id-token: write`, `contents: write`, and `actions: write` for OIDC identity, metadata updates, and publishing dispatch; the template provides a GitHub App alternative for repository writes. Its signing-event job requests `contents: write`, `pull-requests: write`, and `actions: write` for signing branches/PR lifecycle; a separate status issue job receives only `issues: write` and `contents: read`. The actual TUF-on-CI actions and GitHub App token action are SHA-pinned. These are necessary upstream capabilities, but their effective security still depends on workflow triggers, branch/environment settings, OIDC claims, signing key scope, and maintainer account security.
@@ -38,5 +42,6 @@ Context7 was queried on 20 October 2026 for TUF-on-CI and `sigstore-tuf`; it did
 - [TUF v1.0.37 specification](https://theupdateframework.github.io/specification/v1.0.37/)
 - [TUF-on-CI v0.21.0 changelog](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/CHANGELOG.md), [maintenance guide](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md), [signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md), [signer setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-SETUP.md), [online-signing guide](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md), and [upstream template](https://github.com/theupdateframework/tuf-on-ci-template)
 - [`sigstore-tuf` 0.15.0 Rust API](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/)
+- [AWS KMS pricing](https://aws.amazon.com/kms/pricing/) and [Google Cloud KMS pricing](https://cloud.google.com/kms/pricing/)
 - [GitHub OIDC security hardening](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect)
 - Staging TUF-on-CI failure [run 39331918162](https://github.com/Voldigoade/equalturn-registry-staging/actions/runs/39331918162), and current staging publication/smoke documented in [`registry-publication-status.md`](../registry-publication-status.md).
