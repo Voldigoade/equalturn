@@ -2,7 +2,7 @@
 
 Equalturn is a privacy-conscious integrity session system for people who mutually agree to compete without AI assistance. It gives participants pseudonymous session identities and a shared, signed record of events accepted by a relay.
 
-**Status: Milestones 1 and 1.5 are implemented on this branch.** The Rust workspace contains a CLI client, PostgreSQL-backed relay, signed-event protocol, durable local event queue, verifiable reports, hardened participant-key storage, registry v3 validation, and an explicit offline TUF registry verifier. Registry commands verify a caller-selected local repository against an independently supplied root and SHA-256 pin. The publication repository has no production Equalturn root or signed release. The product remains non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
+**Status: Milestones 1, 1.5, and 1.6 are implemented; endpoint enforcement is not.** The Rust workspace contains a CLI client, PostgreSQL-backed relay, signed-event protocol, durable local event queue, verifiable reports, hardened participant-key storage, registry v3 validation, and explicit local/HTTPS TUF update flows with separately installed staging/production profiles. A public staging repository is verified by a pinned test root; production has no root or signed release and fails closed. Registry updates are explicit and never coupled to session or relay activity. The product remains non-enforcing: it accepts synthetic events and session/liveness claims only. It does not inspect workstation activity, block AI services or applications, or include a tray UI. Do not use its event log as proof that prohibited activity did or did not occur.
 
 Participant signatures prove which session key made a claim and whether the included event chain was changed. Relay signatures attest to event receipt/order and to the final manifest. Neither proves that a client observed reality honestly, that an event was not omitted before signing, or that the relay did not withhold evidence. A workstation administrator, second device, virtual machine, remote host, or compromised client remains outside the guarantees of this milestone.
 
@@ -19,6 +19,7 @@ Participant signatures prove which session key made a claim and whether the incl
 - [Registry v3 schema and migration](docs/research/registry-schema-v3.md)
 - [Privacy and report model](docs/privacy.md)
 - [Trusted registry distribution and current limits](docs/registry-trust.md)
+- [Registry distribution incident recovery](docs/registry-disaster-recovery.md)
 - [Enforcement test safety policy](docs/enforcement-test-safety.md)
 - [Secret lifecycle and storage limits](docs/secret-lifecycle.md)
 - [Prior art](docs/prior-art.md)
@@ -42,10 +43,10 @@ Participant signatures prove which session key made a claim and whether the incl
 
 The protocol, limits, signatures, reconnect behavior, retention rules, and known limitations are specified in [protocol v1](docs/protocol-v1.md). The researched AI registry includes structured product, package, extension, executable, and runtime indicators. The session client and relay do not use it for policy; only the separate registry CLI reads a locally verified TUF target.
 
-## Milestone 1.5 implementation boundary
+## Milestones 1.5 and 1.6 implementation boundary
 
 - Participant session keys use current-user DPAPI on Windows and owner-only descriptor-relative storage on supported Unix systems. These protect data at rest within their documented limits; they do not resist the same user, administrator/root, or process-memory compromise.
-- The registry CLI verifies local directory repositories against a root and digest supplied out of band, checks bounded TUF metadata/targets, and supports `verify`, `inspect`, and `search`. It has no HTTP updater or production root.
+- The registry CLI verifies bounded TUF metadata/targets from local repositories and an explicit HTTPS endpoint, checks registry schema/semantics, and installs a re-verifiable snapshot through an atomic two-slot store. Staging and production use separate local profiles; production remains unavailable until a root is embedded through an authenticated release.
 - The registry remains a sourced research catalogue. No registry indicator drives enforcement, and no daemon/service, firewall rule, process observation/blocking, browser/IDE monitoring, or tray UI exists.
 - Future enforcement testing must follow the [isolated-environment safety policy](docs/enforcement-test-safety.md). No experimental enforcement may run on the active development host.
 
@@ -67,7 +68,29 @@ equalturn registry search ./local-registry openai \
   --root-sha256 ROOT_SHA256
 ```
 
-The verified metadata cache is persistent below the Equalturn data directory by default; set `--cache-dir` to select another location. Verification failures print a stable status such as `EXPIRED`, `ROLLBACK`, `INVALID_SIGNATURE`, `INVALID_ROOT`, `INVALID_TARGET`, or `INVALID_REGISTRY` and return a non-zero exit code. A valid TUF signature authenticates publication, not indicator truth or blocking safety. Until the root ceremony and a signed release exist, these commands are trust plumbing for local repositories and test fixtures, not a usable public registry feed.
+The verified metadata cache is persistent below the Equalturn data directory by default; set `--cache-dir` to select another location. Verification failures print a stable status such as `EXPIRED`, `ROLLBACK`, `INVALID_SIGNATURE`, `INVALID_ROOT`, `INVALID_TARGET`, or `INVALID_REGISTRY` and return a non-zero exit code. A valid TUF signature authenticates publication, not indicator truth or blocking safety. Production trust has no root or signed release.
+
+## Explicit TUF profile commands
+
+The HTTPS updater is opt-in and requires an out-of-band root plus an independent lowercase SHA-256 pin on every command. These commands use the public staging test root checked into `crates/registry/tests/fixtures/`; it is a compatibility fixture, **not production trust**:
+
+```sh
+equalturn registry update --profile staging \
+  --url https://voldigoade.github.io/equalturn-registry-staging/ \
+  --root crates/registry/tests/fixtures/staging-root.json \
+  --root-sha256 719e372ecc71e8f509f5805889560382d3d599971b82947f9da825101f323144
+
+equalturn registry status --profile staging \
+  --root crates/registry/tests/fixtures/staging-root.json \
+  --root-sha256 719e372ecc71e8f509f5805889560382d3d599971b82947f9da825101f323144
+
+equalturn registry installed search --profile staging \
+  --root crates/registry/tests/fixtures/staging-root.json \
+  --root-sha256 719e372ecc71e8f509f5805889560382d3d599971b82947f9da825101f323144 \
+  openai
+```
+
+Only `registry update --profile staging` contacts the selected HTTPS repository. Status and installed search reverify the local snapshot offline. The production profile intentionally returns `production registry trust not initialized`; do not copy the staging root into a release or use it to make that profile succeed. The current staging timestamp metadata expires 18 November 2026 and the fixed-content staging workflow does not renew TUF metadata; after expiry the client and smoke test fail closed until an explicit staging signing operation publishes fresh metadata.
 
 ## Local development
 

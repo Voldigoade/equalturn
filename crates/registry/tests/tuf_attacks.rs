@@ -211,6 +211,335 @@ async fn accepts_a_valid_signed_update_and_persists_the_verified_floor() {
 }
 
 #[tokio::test]
+async fn installed_snapshot_survives_reopen_and_is_reverified_offline() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let state = tempfile::tempdir().expect("installed state directory is created");
+
+    let installed = equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("valid repository installs");
+
+    assert_eq!(installed.registry().registry_version(), "0.4.0");
+    let reopened = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("installed snapshot reopens without network");
+    assert_eq!(reopened.target_sha256(), &sha256(REGISTRY_BYTES));
+    assert_eq!(reopened.registry(), installed.registry());
+
+    let pointer_path = state.path().join("current.json");
+    let mut legacy_pointer: Value =
+        serde_json::from_slice(&fs::read(&pointer_path).expect("active pointer is readable"))
+            .expect("active pointer parses");
+    legacy_pointer["format_version"] = json!(1);
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("source");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("timestamp_version");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("snapshot_version");
+    legacy_pointer
+        .as_object_mut()
+        .expect("pointer is an object")
+        .remove("targets_version");
+    fs::write(
+        &pointer_path,
+        serde_json::to_vec(&legacy_pointer).expect("legacy pointer serializes"),
+    )
+    .expect("legacy pointer is written");
+
+    let migrated = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("version 1 installed pointer remains readable");
+    assert_eq!(migrated.timestamp_version(), 1);
+    assert_eq!(migrated.snapshot_version(), 1);
+    assert_eq!(migrated.targets_version(), 1);
+    assert_eq!(migrated.source(), "legacy install record");
+}
+
+#[tokio::test]
+async fn failed_refresh_preserves_the_previous_installed_snapshot() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let state = tempfile::tempdir().expect("installed state directory is created");
+    equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("initial signed repository installs");
+
+    let invalid_candidate = temporary_repository(&signer, b"invalid registry", 2);
+    assert!(
+        equalturn_registry::update_directory_repository(
+            invalid_candidate.path(),
+            &bootstrap_root,
+            &pin(&bootstrap_root),
+            state.path(),
+            now(),
+        )
+        .await
+        .is_err()
+    );
+
+    let still_installed = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("failed candidate does not replace the installed snapshot");
+    assert_eq!(still_installed.target_sha256(), &sha256(REGISTRY_BYTES));
+}
+
+#[tokio::test]
+async fn installed_snapshot_rejects_target_tampering() {
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let state = tempfile::tempdir().expect("installed state directory is created");
+    equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("valid repository installs");
+
+    let pointer: Value = serde_json::from_slice(
+        &fs::read(state.path().join("current.json")).expect("active pointer is readable"),
+    )
+    .expect("active pointer parses");
+    let slot = pointer["slot"].as_str().expect("slot is a string");
+    let target = state
+        .path()
+        .join("slots")
+        .join(slot)
+        .join("targets/registry-v3.json");
+    fs::write(&target, b"tampered installed target").expect("target is corrupted");
+
+    assert!(
+        equalturn_registry::load_installed_registry(
+            state.path(),
+            &bootstrap_root,
+            &pin(&bootstrap_root),
+            now(),
+        )
+        .await
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn installed_snapshot_preserves_consistent_snapshot_filenames() {
+    let signer = Signer::generate();
+    let mut root = root_signed(&signer, 1);
+    root["consistent_snapshot"] = json!(true);
+    let bootstrap_root = envelope(&root, &[&signer]);
+    let repository = tempfile::tempdir().expect("repository directory is created");
+    let files = signed_repository_files(&signer, REGISTRY_BYTES, 1, FAR_FUTURE);
+    write_repository(repository.path(), &files, REGISTRY_BYTES);
+    fs::rename(
+        repository.path().join("metadata/snapshot.json"),
+        repository.path().join("metadata/1.snapshot.json"),
+    )
+    .expect("snapshot metadata receives a consistent name");
+    fs::rename(
+        repository.path().join("metadata/targets.json"),
+        repository.path().join("metadata/1.targets.json"),
+    )
+    .expect("targets metadata receives a consistent name");
+    fs::rename(
+        repository.path().join("targets/registry-v3.json"),
+        repository.path().join(format!(
+            "targets/{}.registry-v3.json",
+            sha256_hex(REGISTRY_BYTES)
+        )),
+    )
+    .expect("target receives its signed hash prefix");
+    let state = tempfile::tempdir().expect("installed state directory is created");
+
+    equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("consistent-snapshot repository installs");
+    let reopened = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("versioned names remain valid for offline verification");
+    assert_eq!(reopened.target_sha256(), &sha256(REGISTRY_BYTES));
+}
+
+#[tokio::test]
+async fn installed_snapshot_preserves_the_authorized_root_rotation_chain() {
+    let old_signer = Signer::generate();
+    let new_signer = Signer::generate();
+    let bootstrap_root = root_bytes(&old_signer);
+    let repository = tempfile::tempdir().expect("repository directory is created");
+    let mut files = signed_repository_files(&new_signer, REGISTRY_BYTES, 2, FAR_FUTURE);
+    let next_root = root_signed(&new_signer, 2);
+    files.push((
+        "2.root.json".into(),
+        envelope(&next_root, &[&old_signer, &new_signer]),
+    ));
+    write_repository(repository.path(), &files, REGISTRY_BYTES);
+    let state = tempfile::tempdir().expect("installed state directory is created");
+
+    let installed = equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("authorized root rotation installs");
+    assert_eq!(installed.trusted_root_version(), 2);
+    let reopened = equalturn_registry::load_installed_registry(
+        state.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        now(),
+    )
+    .await
+    .expect("offline repository replays authorized root chain");
+    assert_eq!(reopened.trusted_root_version(), 2);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn installed_snapshot_rejects_pointer_and_metadata_symlinks() {
+    use std::os::unix::fs::symlink;
+
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let state = tempfile::tempdir().expect("installed state directory is created");
+    equalturn_registry::update_directory_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        state.path(),
+        now(),
+    )
+    .await
+    .expect("valid repository installs");
+
+    let pointer = state.path().join("current.json");
+    let pointer_bytes = fs::read(&pointer).expect("pointer is readable");
+    let outside = state.path().join("outside");
+    fs::write(&outside, &pointer_bytes).expect("outside file is written");
+    fs::remove_file(&pointer).expect("pointer is removed");
+    symlink(&outside, &pointer).expect("pointer symlink is created");
+    assert!(
+        equalturn_registry::load_installed_registry(
+            state.path(),
+            &bootstrap_root,
+            &pin(&bootstrap_root),
+            now(),
+        )
+        .await
+        .is_err()
+    );
+
+    fs::remove_file(&pointer).expect("pointer symlink is removed");
+    fs::write(&pointer, pointer_bytes).expect("valid pointer is restored");
+    let active: Value =
+        serde_json::from_slice(&fs::read(&pointer).expect("pointer is readable after restoration"))
+            .expect("pointer parses");
+    let slot = active["slot"].as_str().expect("slot is a string");
+    let metadata = state
+        .path()
+        .join("slots")
+        .join(slot)
+        .join("metadata/timestamp.json");
+    let outside_metadata = state.path().join("outside-timestamp");
+    fs::write(
+        &outside_metadata,
+        fs::read(&metadata).expect("metadata is readable"),
+    )
+    .expect("outside metadata is written");
+    fs::remove_file(&metadata).expect("installed timestamp is removed");
+    symlink(&outside_metadata, &metadata).expect("metadata symlink is created");
+    assert!(
+        equalturn_registry::load_installed_registry(
+            state.path(),
+            &bootstrap_root,
+            &pin(&bootstrap_root),
+            now(),
+        )
+        .await
+        .is_err()
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn installed_snapshot_rejects_symlink_store_root() {
+    use std::os::unix::fs::symlink;
+
+    let signer = Signer::generate();
+    let bootstrap_root = root_bytes(&signer);
+    let repository = temporary_repository(&signer, REGISTRY_BYTES, 1);
+    let parent = tempfile::tempdir().expect("test parent is created");
+    let actual = parent.path().join("actual");
+    fs::create_dir(&actual).expect("actual directory is created");
+    let link = parent.path().join("link");
+    symlink(&actual, &link).expect("state symlink is created");
+
+    assert!(
+        equalturn_registry::update_directory_repository(
+            repository.path(),
+            &bootstrap_root,
+            &pin(&bootstrap_root),
+            &link,
+            now(),
+        )
+        .await
+        .is_err()
+    );
+}
+
+#[tokio::test]
 async fn rejects_target_bytes_that_do_not_match_signed_target_metadata() {
     let signer = Signer::generate();
     let bootstrap_root = root_bytes(&signer);

@@ -60,12 +60,102 @@ pub enum Command {
 
 #[derive(Subcommand)]
 pub enum RegistryCommand {
+    /// Explicitly fetch and atomically install a registry for one trust profile.
+    Update(RegistryUpdateArgs),
+    /// Verify and display the locally installed profile without network access.
+    Status(RegistryProfileArgs),
     /// Verify a local TUF repository against an independently pinned root.
     Verify(RegistrySourceArgs),
     /// Inspect one entry from a verified local registry repository.
     Inspect(RegistryInspectArgs),
     /// Search a verified local registry repository.
     Search(RegistrySearchArgs),
+    /// Verify, inspect, or search the locally installed profile snapshot.
+    Installed {
+        #[command(subcommand)]
+        command: RegistryInstalledCommand,
+    },
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+pub enum RegistryProfile {
+    Staging,
+    Production,
+}
+
+impl RegistryProfile {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Staging => "staging",
+            Self::Production => "production",
+        }
+    }
+}
+
+#[derive(Args)]
+pub struct RegistryUpdateArgs {
+    /// Select the staging or production registry trust profile.
+    #[arg(long, value_enum)]
+    pub profile: RegistryProfile,
+
+    /// Local TUF repository. Mutually exclusive with --url.
+    #[arg(long, value_name = "PATH")]
+    pub repository: Option<PathBuf>,
+
+    /// HTTPS TUF repository base URL. Mutually exclusive with --repository.
+    #[arg(long, value_name = "URL")]
+    pub url: Option<String>,
+
+    /// Out-of-band trusted root metadata file.
+    #[arg(long, value_name = "PATH")]
+    pub root: Option<PathBuf>,
+
+    /// Independently distributed SHA-256 pin for --root.
+    #[arg(long, value_name = "HEX")]
+    pub root_sha256: Option<String>,
+}
+
+#[derive(Args)]
+pub struct RegistryProfileArgs {
+    /// Select the staging or production registry trust profile.
+    #[arg(long, value_enum)]
+    pub profile: RegistryProfile,
+
+    /// Out-of-band trusted root metadata file.
+    #[arg(long, value_name = "PATH")]
+    pub root: Option<PathBuf>,
+
+    /// Independently distributed SHA-256 pin for --root.
+    #[arg(long, value_name = "HEX")]
+    pub root_sha256: Option<String>,
+}
+
+#[derive(Subcommand)]
+pub enum RegistryInstalledCommand {
+    /// Verify the selected installed snapshot offline.
+    Verify(RegistryProfileArgs),
+    /// Inspect an entry from the selected installed snapshot offline.
+    Inspect(RegistryInstalledInspectArgs),
+    /// Search the selected installed snapshot offline.
+    Search(RegistryInstalledSearchArgs),
+}
+
+#[derive(Args)]
+pub struct RegistryInstalledInspectArgs {
+    #[command(flatten)]
+    pub profile: RegistryProfileArgs,
+    /// Exact registry entry identifier.
+    #[arg(value_name = "ENTRY_ID")]
+    pub entry_id: String,
+}
+
+#[derive(Args)]
+pub struct RegistryInstalledSearchArgs {
+    #[command(flatten)]
+    pub profile: RegistryProfileArgs,
+    /// Case-insensitive provider, product, alias, or indicator query.
+    #[arg(value_name = "QUERY")]
+    pub query: String,
 }
 
 #[derive(Args, Clone)]

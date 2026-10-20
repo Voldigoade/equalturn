@@ -718,6 +718,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "url",
  "uuid",
 ]
 
@@ -780,6 +781,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tokio",
+ "url",
 ]
 
 [[package]]
@@ -2176,6 +2178,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
@@ -2549,6 +2552,7 @@ dependencies = [
  "glob",
  "hex",
  "jiff",
+ "reqwest",
  "serde",
  "serde_json",
  "sigstore-crypto",
@@ -2556,6 +2560,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
+ "url",
 ]
 
 [[package]]

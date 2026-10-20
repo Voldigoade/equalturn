@@ -1,10 +1,10 @@
 use crate::{
-    REGISTRY_TARGET_PATH, ROOT_MAX_BYTES, RegistryError, TufFailureKind, model::Registry,
-    repository::DirectoryRepository,
+    REGISTRY_TARGET_PATH, ROOT_MAX_BYTES, RegistryError, TufFailureKind,
+    http_repository::HttpsRepository, model::Registry, repository::DirectoryRepository,
 };
 use jiff::Timestamp;
 use sha2::{Digest, Sha256};
-use sigstore_tuf::{Error as TufError, MetadataStore, Updater, UpdaterConfig};
+use sigstore_tuf::{Error as TufError, MetadataStore, Repository, Updater, UpdaterConfig};
 use std::{
     fs,
     io::{Read, Write},
@@ -14,6 +14,7 @@ use std::{
         atomic::{AtomicBool, Ordering},
     },
 };
+use url::Url;
 
 const CACHE_MAX_BYTES: usize = crate::REGISTRY_MAX_BYTES;
 
@@ -63,6 +64,28 @@ pub async fn verify_repository(
     verify_bootstrap_root(bootstrap_root, bootstrap_root_sha256)?;
     let repository =
         DirectoryRepository::open(repository_path).map_err(|_| RegistryError::Repository)?;
+    verify_repository_source(repository, bootstrap_root, metadata_cache, now).await
+}
+
+/// Fetch and verify a registry from an HTTPS-only TUF repository.
+pub async fn verify_https_repository(
+    base_url: &Url,
+    bootstrap_root: &[u8],
+    bootstrap_root_sha256: &[u8; 32],
+    metadata_cache: &Path,
+    now: Timestamp,
+) -> Result<VerifiedRegistry, RegistryError> {
+    verify_bootstrap_root(bootstrap_root, bootstrap_root_sha256)?;
+    let repository = HttpsRepository::new(base_url)?;
+    verify_repository_source(repository, bootstrap_root, metadata_cache, now).await
+}
+
+async fn verify_repository_source(
+    repository: impl Repository + 'static,
+    bootstrap_root: &[u8],
+    metadata_cache: &Path,
+    now: Timestamp,
+) -> Result<VerifiedRegistry, RegistryError> {
     let store = Arc::new(
         PersistentMetadataStore::open(metadata_cache).map_err(|_| RegistryError::Repository)?,
     );
@@ -96,6 +119,11 @@ pub async fn verify_repository(
 
 fn classify_tuf_error(error: TufError) -> RegistryError {
     let kind = match error {
+        TufError::Transport {
+            message,
+            source: None,
+        } if message.ends_with("not found") => TufFailureKind::InvalidMetadata,
+        TufError::Transport { .. } | TufError::Io { .. } => return RegistryError::Repository,
         TufError::Expired { .. } => TufFailureKind::Expired,
         TufError::Rollback { .. } => TufFailureKind::Rollback,
         TufError::BadRootVersion { .. } => TufFailureKind::InvalidRoot,
@@ -109,6 +137,7 @@ fn classify_tuf_error(error: TufError) -> RegistryError {
 fn classify_target_error(error: TufError) -> RegistryError {
     let classified = classify_tuf_error(error);
     match classified {
+        RegistryError::Repository => RegistryError::Repository,
         RegistryError::Tuf(
             TufFailureKind::Expired | TufFailureKind::Rollback | TufFailureKind::InvalidSignature,
         ) => classified,
@@ -382,4 +411,30 @@ fn verify_expected_digest(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{classify_target_error, classify_tuf_error};
+    use crate::{RegistryError, RegistryVerificationStatus};
+    use sigstore_tuf::Error as TufError;
+
+    #[test]
+    fn classifies_transport_failures_as_repository_unavailable() {
+        let error = classify_tuf_error(TufError::transport("test transport failure"));
+        assert_eq!(
+            error.verification_status(),
+            RegistryVerificationStatus::InvalidRepository
+        );
+    }
+
+    #[test]
+    fn target_transport_failures_remain_repository_errors() {
+        let error = classify_target_error(TufError::transport("test target transport failure"));
+        assert!(matches!(error, RegistryError::Repository));
+        assert_eq!(
+            error.verification_status(),
+            RegistryVerificationStatus::InvalidRepository
+        );
+    }
 }
