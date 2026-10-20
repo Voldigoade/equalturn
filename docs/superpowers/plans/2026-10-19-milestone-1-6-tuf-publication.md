@@ -6,7 +6,7 @@
 
 **Architecture:** Keep reviewed registry source and validation in Equalturn. Use a separately isolated staging repository with standard TUF keys and a fixed-content GitHub Pages deployment workflow; the deploy job does not sign metadata. Extend `equalturn-registry` with bounded HTTPS transport and crash-safe installed state, keep profile selection explicit, and use `sigstore-tuf` for all verification. Production remains fail-closed until its independent offline root ceremony.
 
-**Tech Stack:** Existing Rust workspace and `sigstore-tuf` 0.15.0; TUF-on-CI current upstream template/actions; GitHub Pages; existing registry v3 generator/validators; Tokio/reqwest already present in the lockfile through `sigstore-tuf`.
+**Tech Stack:** Existing Rust workspace and `sigstore-tuf` 0.15.0; `tuftool` 0.17.0 for one-time standard-key staging metadata; fixed-content GitHub Pages workflow; existing registry v3 generator/validators; Tokio/reqwest already present in the lockfile through `sigstore-tuf`. TUF-on-CI was evaluated but its staging signer path was not selected after interoperability/configuration failures.
 
 **Spec:** User-supplied Milestone 1.6 mission brief; `docs/registry-trust.md`; `docs/enforcement-test-safety.md`.
 
@@ -159,7 +159,7 @@
 - [x] Cover authenticated update, target tampering, signed rollback, expiry/freeze, unauthorized root, authorized root rotation, missing metadata, bounded/oversized target, mix-and-match, cache corruption, and malformed metadata in deterministic registry tests (23 TUF attack tests pass).
 - [x] Add an actual HTTPS staging smoke test that installs the published repository and reopens the local state offline; mandatory PR CI remains deterministic and does not depend on Pages availability.
 - [ ] Live-signer root/targets rotation and short-expiry renewal are not exercised: staging metadata uses disposable local key material and the static deploy workflow has no signer. Deterministic Rust attack tests cover authorized/unauthorized root rotation and expiry without waiting.
-- [x] Rebuild target bytes from source commit `5c46bc6d59a69b5417a3c571a45c8f15529e26ef` and compare the public target digest; CLI tests and the live test cover stable status/failure behavior. Registry crate: 49 tests pass, 1 live smoke test passes explicitly, and focused Clippy is warning-free.
+- [x] Rebuild target bytes from source commit `5c46bc6d59a69b5417a3c571a45c8f15529e26ef` and compare the public target digest; CLI tests and the live test cover stable status/failure behavior. Registry crate: 50 tests pass with the live smoke ignored by default; explicit live smoke passes 1/1; focused Clippy is warning-free. The Windows fixture issue was fixed and follow-up branch CI passed Linux/PostgreSQL and Windows (run `39346243590`).
 
 ### Task 9: Release gates, recovery docs, and production preparation
 
@@ -171,10 +171,10 @@
 - Consumes: staging evidence and release interfaces from Tasks 4–8.
 - Produces: release review gates, error/fallback semantics, source-to-target procedure, compromise/loss runbooks, and a production repository prepared without production private material.
 
-- [ ] Require schema/semantic validation, warning review, deterministic target/hash, source revision, indicator actionability review, and signer threshold before signing.
-- [ ] Document recovery for every TUF role, hosting/account compromise, erroneous indicators, expiry, and lost root quorum; correct errors by publishing a new semantic version.
-- [ ] Ensure CI includes format, Clippy, Rust tests, registry validation, target reproducibility, TUF attacks, audit and Windows/Linux regression; keep permissions minimal.
-- [ ] Add final explicit production fail-closed status and the exact offline signer handoff; commit/push the documentation/CI checkpoint.
+- [x] Require schema/semantic validation, warning review, deterministic target/hash, source revision, indicator actionability review, and signer threshold before signing; documented in `CONTRIBUTING.md` and the TUF release gate.
+- [x] Document recovery for every TUF role, hosting/account compromise, erroneous indicators, expiry, and lost root quorum; correct errors by publishing a new semantic version. See `docs/registry-disaster-recovery.md`.
+- [x] Ensure CI includes format, Clippy, Rust tests, registry validation, target reproducibility, TUF attacks, audit and Windows/Linux regression; keep permissions minimal. The branch run `39346243590` passed.
+- [x] Add final explicit production fail-closed status and signer handoff; commit/push the documentation checkpoint after focused review and verification.
 
 ### Task 10: Final branch review and integration
 

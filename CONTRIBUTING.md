@@ -1,6 +1,6 @@
 # Contributing
 
-Equalturn has a working non-enforcing Milestone 1 Rust CLI and relay, plus Milestone 1.5 local registry trust plumbing and key-storage hardening. The production registry root/release and all endpoint enforcement remain uninitialized or out of scope. Contributions must preserve the documented trust boundary and privacy model.
+Equalturn has a working non-enforcing Milestone 1 Rust CLI and relay, hardened session-key storage, registry v3 semantic validation, and Milestone 1.6 TUF trust plumbing with an opt-in HTTPS staging path. The production registry root/release and all endpoint enforcement remain uninitialized or out of scope. Contributions must preserve the documented trust boundary and privacy model.
 
 ## Research contributions
 
@@ -38,9 +38,24 @@ Equalturn has a working non-enforcing Milestone 1 Rust CLI and relay, plus Miles
    ```
 
 6. In the pull request, explain why each indicator exists, how its source supports the value, and why its actionability/false-positive classification is justified. Request an independent review for source claims and safety semantics.
-7. Do not create or publish TUF metadata or signing keys. The publication repository and production root ceremony are not initialized; any future release must use the documented TUF workflow after its separate key-custody gates are met.
+7. Do not create or publish TUF metadata or signing keys as part of a registry-content pull request. The public staging endpoint is a non-production compatibility fixture with disposable signer material; its static deploy workflow cannot create a new signed release. Production publication is not initialized. Any future release requires an approved signer/custody design and the separate release gates in [registry trust](docs/registry-trust.md).
 
 Registry contents remain research data. They do not trigger network policy or workstation enforcement.
+
+## Registry trust and release gates
+
+TUF establishes that metadata/target bytes were authorized by the configured key policy and have not been altered. It does not prove that an indicator is true, current, or safe to block. Research review and signing authorization are distinct checks.
+
+Before an authorized maintainer requests or performs a TUF target release, the release record must include:
+
+- the exact Equalturn source commit, registry semantic version, deterministic target SHA-256 and byte length;
+- schema and semantic validator output, including reviewer disposition for every warning;
+- a semantic diff of changed products, sources, relationships, and indicators;
+- an evidence-based reason for every new/changed indicator and its confidence, actionability, false-positive risk, scope, and limitations;
+- the expected repository identity, metadata versions/expiries, trusted root digest, and signer threshold;
+- independent review approval and post-publication target/hash verification with the Rust client.
+
+Do not sign directly from an unreviewed working tree. The current staging deploy job only copies fixed static files; it holds no signing key and cannot renew metadata. Current staging root/targets signer material is not durable, and the earliest published metadata expiry is 18 November 2026. Staging renewals require a deliberate separate non-production signing operation; the production root ceremony remains blocked until its maintainer-custody prerequisites are satisfied. See [registry disaster recovery](docs/registry-disaster-recovery.md), [registry trust](docs/registry-trust.md), and [production root ceremony](docs/production-root-ceremony.md).
 
 ## Changes
 
