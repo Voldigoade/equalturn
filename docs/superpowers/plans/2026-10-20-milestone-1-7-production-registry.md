@@ -73,3 +73,15 @@ Each task is complete only after its relevant focused tests pass and its code/do
 - Strengthened the CLI integration regression to install a genuinely signed staging snapshot, then attempt production update and status with the staging root, repository, and shared data directory. Both production operations remain fail-closed, and no production-profile state is created. Invalid staging input also leaves existing staging state intact.
 - Focused verification: `cargo fmt --all -- --check`; `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn --all-targets --all-features --locked -- -D warnings`; `CARGO_BUILD_JOBS=1 cargo test -p equalturn --locked --test registry_cli` (4 passed). An initial test invocation used a sandbox-read-only home cache temp path; rerun with disk-backed `target/tmp` succeeded. No production root or private key was generated.
 - This is an integration-test-only hardening checkpoint; production remains deliberately unavailable pending the separate root/custody gate.
+
+### Task 4 — client-side signing-role rotation rehearsal
+
+- Added a TUF verifier rehearsal that rotates the targets role from the bootstrap key to a distinct target key under a dual-authorized root v2. The client accepts target metadata signed by the new authorized key, then rejects a later target manifest signed only by the retired key. The fixture uses `sigstore-tuf`'s canonical JSON and signing primitives; no project-owned TUF signature implementation was added.
+- Focused verification: `cargo fmt --all -- --check`; `CARGO_BUILD_JOBS=1 cargo test -p equalturn-registry --locked --test tuf_attacks` (24 passed); `CARGO_BUILD_JOBS=1 cargo clippy -p equalturn-registry --all-targets --all-features --locked -- -D warnings`.
+- Scope limit: this proves the Equalturn client's TUF role transition behavior, not an operational TUF-on-CI renewal ceremony. The disposable staging repository remains fixed-content Pages publication; production signer, root, online provider, and renewal path remain gated on owner custody and account-level decisions.
+
+#### Staging-only GitHub workflow permission state
+
+- Read-only UI inspection on 20 October 2026 confirmed `equalturn-registry-staging` has GitHub Actions PR creation/approval enabled, while its default `GITHUB_TOKEN` permission remains read-only and its publication workflow grants only the documented job-level permissions. This is consistent with the user's staging-only approval.
+- The production `equalturn-registry` repository remains unchanged: Actions PR creation/approval is disabled, the default token is read-only, and the repository currently allows all Actions without requiring full-SHA pins at the repository setting level. Production settings have not been changed; these remain a production setup gate.
+- The staging repository's existing merged PRs #5 and #10–#12 continue to establish standard-key fixture replacement and fixed-content Pages publishing. They do not establish a renewable signing path or production trust.
