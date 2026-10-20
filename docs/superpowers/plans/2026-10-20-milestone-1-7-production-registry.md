@@ -42,3 +42,12 @@ TUF role and key boundaries, initial root pinning, root/key lifecycle, fixed pro
 ## Stage completion records
 
 Each task is complete only after its relevant focused tests pass and its code/docs have been reviewed. Commits and push/CI URLs will be appended here after each checkpoint; external custody-dependent work is explicitly marked blocked until the owner operates the approved workflow.
+
+### Task 1 — baseline and current publisher review
+
+- Reviewed the clean reviewed-main baseline, production and staging trust boundary, registry client/CLI, CI, production publisher repository README and workflows, and current TUF-on-CI v0.21.0 manuals/workflow.
+- Recorded the baseline and safe scope in the design record. Baseline observed: `cargo fmt --all -- --check` and workspace Clippy passed; workspace tests passed with 128 passed and 1 ignored; v2/v3 registry validators and deterministic target check passed; pinned-root staging HTTPS smoke passed 1/1; local advisory audit snapshot from 17 October 2026 reported no findings. PostgreSQL was unavailable locally, so the DB-backed subcase was skipped; reviewed baseline main CI had passed Linux/PostgreSQL and Windows.
+- Current publisher review confirms `sign/init` is the supported initialization path and standard TUF keys are required for the pinned Equalturn client. The staging failure came from importing externally generated metadata without TUF-on-CI's `x-tuf-on-ci-expiry-period`; Sigstore OIDC remains incompatible with the current Rust client. The production repo has no root, metadata, target, Pages feed, or configured cloud role.
+- Context7 lookup did not return an exact TUF-on-CI or `sigstore-tuf` library entry; upstream manuals, current workflow, pinned Rust crate docs/source, and staging run evidence were used.
+- Focused verification for this documentation-only task: `git diff --check` (record result after commit). No code/CI behavior changed. The repository's mandatory CI triggers on `main` push, PR to `main`, or manual dispatch; this branch push alone is not expected to start CI.
+- Plan checkpoint: `3deeac7e243c0a6ed466563b6ae18a459620653a` (`docs: plan milestone 1.7 production registry trust`), pushed to `work/milestone-1.7-production-registry`.
