@@ -1,6 +1,6 @@
 use equalturn_registry::{RegistryError, RegistryVerificationStatus, verify_repository};
 use jiff::Timestamp;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 use sha2::{Digest, Sha256};
 use sigstore_crypto::KeyPair;
 use sigstore_tuf::{Key, canonical_json::to_canonical_bytes};
@@ -92,6 +92,43 @@ fn root_signed(signer: &Signer, version: u64) -> Value {
     })
 }
 
+fn role(signer: &Signer) -> Value {
+    json!({ "keyids": [signer.id], "threshold": 1 })
+}
+
+fn root_signed_with_roles(
+    root_signer: &Signer,
+    timestamp_signer: &Signer,
+    snapshot_signer: &Signer,
+    targets_signer: &Signer,
+    version: u64,
+) -> Value {
+    let mut keys = Map::new();
+    for signer in [
+        root_signer,
+        timestamp_signer,
+        snapshot_signer,
+        targets_signer,
+    ] {
+        keys.insert(signer.id.clone(), signer.value.clone());
+    }
+
+    json!({
+        "_type": "root",
+        "spec_version": "1.0.0",
+        "version": version,
+        "expires": FAR_FUTURE,
+        "consistent_snapshot": false,
+        "keys": keys,
+        "roles": {
+            "root": role(root_signer),
+            "timestamp": role(timestamp_signer),
+            "snapshot": role(snapshot_signer),
+            "targets": role(targets_signer),
+        },
+    })
+}
+
 fn root_bytes(signer: &Signer) -> Vec<u8> {
     let signed = root_signed(signer, 1);
     envelope(&signed, &[signer])
@@ -119,6 +156,17 @@ fn signed_repository_files(
     version: u64,
     timestamp_expires: &str,
 ) -> Vec<(String, Vec<u8>)> {
+    signed_repository_files_with_roles(signer, signer, signer, target, version, timestamp_expires)
+}
+
+fn signed_repository_files_with_roles(
+    targets_signer: &Signer,
+    snapshot_signer: &Signer,
+    timestamp_signer: &Signer,
+    target: &[u8],
+    version: u64,
+    timestamp_expires: &str,
+) -> Vec<(String, Vec<u8>)> {
     let targets_signed = json!({
         "_type": "targets",
         "spec_version": "1.0.0",
@@ -131,7 +179,7 @@ fn signed_repository_files(
             }
         },
     });
-    let targets = envelope(&targets_signed, &[signer]);
+    let targets = envelope(&targets_signed, &[targets_signer]);
 
     let snapshot_signed = json!({
         "_type": "snapshot",
@@ -140,7 +188,7 @@ fn signed_repository_files(
         "expires": FAR_FUTURE,
         "meta": { "targets.json": metadata_file(&targets, version) },
     });
-    let snapshot = envelope(&snapshot_signed, &[signer]);
+    let snapshot = envelope(&snapshot_signed, &[snapshot_signer]);
 
     let timestamp_signed = json!({
         "_type": "timestamp",
@@ -149,7 +197,7 @@ fn signed_repository_files(
         "expires": timestamp_expires,
         "meta": { "snapshot.json": metadata_file(&snapshot, version) },
     });
-    let timestamp = envelope(&timestamp_signed, &[signer]);
+    let timestamp = envelope(&timestamp_signed, &[timestamp_signer]);
 
     vec![
         ("timestamp.json".into(), timestamp),
@@ -649,6 +697,71 @@ async fn accepts_a_root_rotation_authorized_by_both_old_and_new_roots() {
     .expect("dual-authorized root rotation is accepted");
 
     assert_eq!(verified.trusted_root_version(), 2);
+}
+
+#[tokio::test]
+async fn targets_key_rotation_accepts_new_key_and_rejects_retired_key() {
+    let old_root_and_targets = Signer::generate();
+    let new_root = Signer::generate();
+    let new_targets = Signer::generate();
+    let bootstrap_root = root_bytes(&old_root_and_targets);
+    let next_root = root_signed_with_roles(
+        &new_root,
+        &old_root_and_targets,
+        &old_root_and_targets,
+        &new_targets,
+        2,
+    );
+    let next_root_envelope = envelope(&next_root, &[&old_root_and_targets, &new_root]);
+    let repository = tempfile::tempdir().expect("repository directory is created");
+    let mut files = signed_repository_files_with_roles(
+        &new_targets,
+        &old_root_and_targets,
+        &old_root_and_targets,
+        REGISTRY_BYTES,
+        2,
+        FAR_FUTURE,
+    );
+    files.push(("2.root.json".into(), next_root_envelope.clone()));
+    write_repository(repository.path(), &files, REGISTRY_BYTES);
+    let cache = tempfile::tempdir().expect("metadata cache is created");
+
+    let verified = verify_repository(
+        repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .expect("targets key authorized by the rotated root is accepted");
+    assert_eq!(verified.trusted_root_version(), 2);
+
+    let retired_key_repository = tempfile::tempdir().expect("repository directory is created");
+    let mut files = signed_repository_files_with_roles(
+        &old_root_and_targets,
+        &old_root_and_targets,
+        &old_root_and_targets,
+        REGISTRY_BYTES,
+        3,
+        FAR_FUTURE,
+    );
+    files.push(("2.root.json".into(), next_root_envelope));
+    write_repository(retired_key_repository.path(), &files, REGISTRY_BYTES);
+
+    let error = verify_repository(
+        retired_key_repository.path(),
+        &bootstrap_root,
+        &pin(&bootstrap_root),
+        cache.path(),
+        now(),
+    )
+    .await
+    .require_error("retired targets key must not authorize a new release");
+    assert_eq!(
+        error.verification_status(),
+        RegistryVerificationStatus::InvalidSignature
+    );
 }
 
 #[tokio::test]

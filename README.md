@@ -166,11 +166,14 @@ python3 tools/validate_registry.py
 python3 tools/validate_registry_v3.py
 python3 tools/build_registry_release.py --output dist/registry-v3.json
 python3 tools/build_registry_release.py --output dist/registry-v3.json --check
+python3 tools/build_registry_release.py --source-commit FULL_COMMIT_ID --output downloaded/registry-v3.json --check
 cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
 cargo test --workspace --locked
 ```
 
 The v3 validator and deterministic target builder require the pinned Python package in `requirements-registry.txt`. Install it in a virtual environment (`python3 -m venv .venv`, activate `.venv`, then `python -m pip install -r requirements-registry.txt`). The generated `dist/` directory is ignored build output, not a maintained source file.
+
+The `--source-commit` comparison expects `downloaded/registry-v3.json` to already contain the published target obtained through the trusted TUF update path; it compares those bytes with the registry and schema from the exact Git commit.
 
 ## Privacy and trust boundary
 

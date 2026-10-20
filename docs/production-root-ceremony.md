@@ -1,43 +1,47 @@
 # Production registry root ceremony
 
-**Status:** not authorized to run in the development environment; no production key has been generated.<br>
-This document is a future operational gate, not an invitation to create a key in this checkout.
+**Status:** production key generation is not authorized or started.<br>
+This runbook describes the future owner-operated gate. It is not a request to create keys in this checkout.
 
-The current public staging repository is a standard-key, fixed-content Pages publication used only for Rust client interoperability. Its deploy job does not sign TUF metadata, and its test signer material is disposable. The earlier staging Sigstore/OIDC root was incompatible with the selected Rust verifier. Neither staging mode is a production signer design.
+The current staging repository is a fixed-content standard-key Pages publication used only for Rust-client interoperability. It does not sign or renew metadata. Its key material is disposable. The earlier TAP-18 Sigstore/OIDC root is incompatible with the pinned Rust verifier. Neither staging state is production trust.
 
-## Preconditions
+## Before the owner gate
 
-Do not begin until all are true:
+Complete the following without production secrets:
 
-1. Three independently accountable maintainers are named in project governance and each accepts offline root-custodian duty.
-2. Each custodian has a separate supported hardware-backed signer and a clean, controlled signing environment. No signer key is copied into source control, CI, chat, a shared workstation account, or the other custodians' routine storage.
-3. The production repository and exact endpoint are reviewed. The expected endpoint is `https://voldigoade.github.io/equalturn-registry/`; it must not be treated as initialized until published metadata passes independent verification.
-4. Production branch protection, signing-event review, Pages configuration, and the minimal workflow permissions are inspected by maintainers. Online snapshot/timestamp identities are separately scoped; no static signing key is stored as a repository secret.
-5. The application release channel that will carry the bootstrap root and its expected digest is documented. If GitHub is the incident under investigation, the digest must be verified through another channel.
-6. `docs/registry-production-trust.md` has no unresolved policy decisions and current TUF-on-CI version/workflows are rechecked.
+1. Recheck the current Equalturn and `equalturn-registry` source/default branches and current TUF-on-CI version.
+2. Confirm production is initialized from the upstream TUF-on-CI template, but do not run `sign/init` yet.
+3. Review the role thresholds, expiry/resign windows, PIV device/key type, role-key separation, encrypted recovery method, cloud KMS provider/costs, GitHub settings and OIDC claims with the owner.
+4. In a disposable repository, exercise the exact TUF-on-CI signer setup and role configuration with standard TUF keys, then verify root bootstrap and repository metadata using Equalturn's Rust verifier. Test role renewal, root and targets rotation, target tamper, expiration, and recovery. Do not use production key material in the rehearsal.
+5. Confirm the reviewed Equalturn application release channel that will carry the initial root bytes and digest. If GitHub is the incident under investigation, obtain the expected root fingerprint through another authenticated channel.
+6. Recheck GitHub Actions defaults, action allowlist/full-SHA pinning, signing-event permissions, Pages source/environment, publication branch, ruleset/branch protection, and exact OIDC trust conditions. On 20 October 2026, the production repo's authenticated settings UI showed Pages disabled, no environments/rulesets, read-only default workflow token with PR creation disabled, all Actions allowed with no full-SHA requirement, and secret scanning/push protection enabled. Those settings were not changed during the read-only review; configure the required restrictions and Pages environment before initializing production.
 
-If any prerequisite is unavailable, defer publication. Do not reduce root or targets thresholds or import staging keys.
+If the signer, recovery method, compatible online roles, or release channel cannot be demonstrated, defer production root creation. Never import or reuse staging keys.
 
-## Ceremony procedure
+## Owner-operated initialization and release
 
-1. Freeze the Equalturn source commit and produce `registry-v3.json` with the deterministic release builder. Record the source revision, target SHA-256, registry semantic version, warnings, and review decision in a release record.
-2. Select a maintained publisher/signing workflow only after it interoperates with the pinned Equalturn Rust TUF verifier using the exact intended role key types, expiration configuration, and repository layout. TUF-on-CI is a candidate, not a validated production choice: the earlier Sigstore/OIDC staging root was incompatible with the Rust client, and the attempted standard-key staging publish action rejected its expiry configuration. Do not handcraft TUF cryptography or weaken client checks to accommodate a publisher. If no supported signing path passes end-to-end tests, defer production publication.
-3. Use the selected upstream signing client to prepare root metadata. Each root custodian independently inspects the exact proposed root and verifies the version, key IDs, thresholds, expiry, repository identity, and role delegations. At least two of the three distinct root custodians must approve under the planned threshold.
-4. Each target signer inspects the target diff and the source/hash/review record before signing. At least two distinct authorized signers must approve the target metadata. Review signatures are authorization, not a substitute for registry research review.
-5. Complete the signing event using the selected publisher's documented workflow. Merge only after the required threshold and workflow verification pass. Keep publication credentials and write permissions isolated from ordinary Equalturn CI; the publication job must only publish the TUF state authorized by its proper roles.
-6. Download the exact published version from an independent client. Verify root-to-timestamp/ snapshot/targets metadata and the target hash with the Rust TUF client. Compare the target bytes with a fresh deterministic local build. Independently compare the published initial root bytes and digest with the release candidate.
-7. Pin the exact production root bytes and hash into the reviewed application release through the approved bootstrap channel. Confirm the production profile cannot select or fall back to staging. Announce the endpoint only after that release and the published repository have both been verified.
-8. Record only public role/key fingerprints, metadata versions, expiration times, target hash, source commit, verification outputs, and signer roster/approval record. Never place private key material or seed exports in the evidence bundle.
+1. Freeze the reviewed Equalturn source commit. Build `registry-v3.json` with `tools/build_registry_release.py` and create the deterministic source-commit/digest/review record. Confirm schema and semantic validation and review every warning.
+2. Using the owner-controlled PIV signer environment and the TUF-on-CI signer tool, run `tuf-on-ci-delegate sign/init` in a clean clone of `Voldigoade/equalturn-registry`. The owner must personally review the signing tool's proposed root, thresholds, roles, expiry, repository identity, and key IDs. Codex must not receive private key bytes or output that could contain them.
+3. Keep root and targets under human PIV custody, using distinct standard TUF keys. Under the recommended initial single-custodian policy, thresholds remain 1-of-1; this is not independent multi-party approval. If the owner instead confirms an actual independent signer group, encode its real threshold and custody rather than synthesizing extra identities.
+4. Configure the separately authorized OIDC-to-KMS path for snapshot and timestamp with separate role keys and least-privilege repository/workflow/branch/environment claims. Do not store static private role keys or cloud credentials in GitHub Secrets. If the provider has not been authorized/provisioned, do not publish a feed that nobody can renew.
+5. Complete the TUF-on-CI signing event only after the target source commit, digest, size, semantic version, counts, warnings, and human review are recorded. The signing workflow must use only the TUF-on-CI implementation and pinned upstream actions.
+6. From a fresh client, fetch only `https://voldigoade.github.io/equalturn-registry/` and verify root through timestamp, snapshot, targets, target digest, schema, and semantics with Equalturn's Rust client. Rebuild from the immutable source commit and compare target bytes exactly.
+7. Pin the exact PUBLIC root bytes and their independently computed SHA-256 into Equalturn's production trust module. Add tests proving staging root, URL, cache, and metadata cannot replace production trust. Never include private material in the release.
+8. Run the clean production update, offline reopen, expiry, rollback, and target-tamper smoke. Record public role IDs/fingerprints, metadata versions/expiries, root digest, target digest/size, source commit, publication commit, and workflow run.
 
-## Rotation and recovery drills
+## Key backup and recovery rehearsal
 
-Before initial release, provision a disposable test repository using the selected signer workflow. The current static staging repository cannot perform signing or rotation drills. Test authorized root rotation, old/new threshold checks, and fresh-client version-by-version advancement. Test target correction and online-role rotation in that disposable repository first. Exercise the recovery copy procedure without exposing recovery material to CI. Preserve all versioned root metadata required for clients to rotate.
+The public key IDs/fingerprints identify what recovery restored; they are not secrets. Keep the private recovery copy encrypted with a separately controlled passphrase and in a different physical/storage location where feasible. For a PIV-based key, do not assume a non-exportable token can be backed up: use only an upstream-supported import/recovery procedure verified in a disposable TUF-on-CI repository. Do not make an untracked backup in the development environment. Restore the disposable recovery copy into a clean test signer, sign a test role operation, and verify it with the rehearsal root. Destroy only rehearsal material after tests and confirm no secret entered logs, commits, or artifacts.
 
-On root compromise or loss of threshold, stop the current repository. Do not accept a replacement root from its endpoint. Ship a new application trust anchor through an independently authenticated release and retire the prior repository identity. If that distribution path cannot be independently authenticated, pause the update service and communicate the unresolved risk rather than claiming recovery.
+If the chosen signer has no tested recovery path, root loss requires shipping a new initial root through an independently authenticated application release; the existing TUF chain cannot recover itself. If the root is compromised, stop publication and use a new authenticated app trust anchor. Never accept a replacement root merely because it is served by the existing endpoint.
+
+## Online renewal
+
+TUF-on-CI's scheduled online signing renews snapshot/timestamp using the configured supported KMS identity. A separate credential-free production monitor should use the pinned root and Rust verifier to check role expiry well before the timestamp/targets/root thresholds; it must fail on missing, expired, tampered, or unverifiable metadata and remain separate from PR CI. Root renewal and all root-key changes remain explicit human signing events. Keep the last known-good client install intact after network or partial-update failure, but consider it valid only while the signed metadata remains unexpired and re-verifiable.
 
 ## Upstream runbooks
 
-- [TUF-on-CI repository maintenance manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md)
-- [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md)
+- [TUF-on-CI repository maintenance](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md)
 - [TUF-on-CI signer setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-SETUP.md)
-- [TUF-on-CI online-signing setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md)
+- [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md)
+- [TUF-on-CI online signing](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md)
