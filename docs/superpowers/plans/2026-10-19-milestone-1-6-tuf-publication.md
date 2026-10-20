@@ -185,7 +185,7 @@
 - Consumes: all task outputs.
 - Produces: verified branch/PR, clean `main`, final Linux/PostgreSQL and Windows CI, and an evidence-based report.
 
-- [x] Run format, Clippy, full workspace tests, registry v2/v3 validation, deterministic generation, TUF attack tests, cargo-audit, Windows CI, Linux/PostgreSQL CI, and live staging smoke. Local results and the last pre-documentation branch CI are recorded in `docs/registry-publication-status.md`; documentation changes require a fresh branch CI run.
+- [x] Run format, Clippy, full workspace tests, registry v2/v3 validation, deterministic generation, TUF attack tests, cargo-audit, Windows CI, Linux/PostgreSQL CI, and live staging smoke. Local results and successful branch CI run `39348415799` are recorded in `docs/registry-publication-status.md`.
 - [x] Review trust boundaries, GitHub workflow permissions, staging/production separation, unsafe/panic/secret occurrences, and all TODO/FIXME/HACK occurrences. Production request paths in the reviewed registry boundary do not use `unwrap`/`expect`; occurrences are in tests, and no unfinished TODO/FIXME/HACK implementation marker was found.
 - [ ] Open/update and merge the PR only after green branch CI; inspect final `main` CI and published staging after merge.
 - [ ] Verify a clean final repository and report any external/environment limitation without overstating completion.

@@ -82,4 +82,4 @@ Fresh local verification on `work/milestone-1.6-tuf-publication`:
 | `cargo audit --file Cargo.lock` | PASS using `cargo-audit` 0.22.2 |
 | `git diff --check` | PASS after this documentation cleanup |
 
-The latest branch CI observed before this documentation-only checkpoint was run [39346872781](https://github.com/Voldigoade/equalturn/actions/runs/39346872781) on code commit `eeef473`: Linux/PostgreSQL and Windows both passed. The documentation checkpoint must still pass branch CI before integration. Main integration, the post-merge main CI run, and the main-branch staging smoke remain final gates.
+The implementation and branch-review checkpoint at `ede102c` passed branch CI run [39348415799](https://github.com/Voldigoade/equalturn/actions/runs/39348415799): Linux/PostgreSQL and Windows both passed. This note is a documentation-only follow-up; main integration, the post-merge main CI run, and the main-branch staging smoke remain final gates.
