@@ -1,7 +1,7 @@
 # Registry publication status
 
 **Checked:** 20 October 2026<br>
-**Milestone:** 1.6 implementation in progress<br>
+**Milestone:** 1.6 implementation integrated on `main`<br>
 **Production status:** uninitialized; fail closed
 
 ## Baseline capture
@@ -82,4 +82,8 @@ Fresh local verification on `work/milestone-1.6-tuf-publication`:
 | `cargo audit --file Cargo.lock` | PASS using `cargo-audit` 0.22.2 |
 | `git diff --check` | PASS after this documentation cleanup |
 
-The implementation and branch-review checkpoint at `ede102c` passed branch CI run [39348415799](https://github.com/Voldigoade/equalturn/actions/runs/39348415799): Linux/PostgreSQL and Windows both passed. This note is a documentation-only follow-up; main integration, the post-merge main CI run, and the main-branch staging smoke remain final gates.
+The implementation and branch-review checkpoint at `ede102c` passed branch CI run [39348415799](https://github.com/Voldigoade/equalturn/actions/runs/39348415799): Linux/PostgreSQL and Windows both passed. The final documentation-only checkpoint on branch commit `67570a1` also passed both jobs in [39348641700](https://github.com/Voldigoade/equalturn/actions/runs/39348641700).
+
+## Main integration
+
+PR [#2](https://github.com/Voldigoade/equalturn/pull/2) was merged on 20 October 2026 as merge commit `30a5698e86d1cd6d4083a62476b7008f465a91e1`. Post-merge main CI run [39348834076](https://github.com/Voldigoade/equalturn/actions/runs/39348834076) passed Linux with PostgreSQL integration and Windows. Main-branch staging smoke run [39348834132](https://github.com/Voldigoade/equalturn/actions/runs/39348834132) verified the pinned public root, installed the registry through HTTPS/TUF, and reopened the installed state. Production trust remains uninitialized; no enforcement was introduced.
