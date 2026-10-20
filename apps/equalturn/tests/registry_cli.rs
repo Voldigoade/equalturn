@@ -180,21 +180,68 @@ fn explicit_staging_profile_updates_and_reads_only_verified_installed_data() {
 #[test]
 fn production_profile_fails_closed_and_staging_never_discovers_its_root() {
     let directory = tempfile::tempdir().expect("test directory is created");
+    let repository = support::tuf::signed_repository(REGISTRY_BYTES);
+    let root = directory.path().join("staging-root.json");
     let data_dir = directory.path().join("equalturn-data");
+    fs::write(&root, &repository.root).expect("staging root is written");
+
+    let staging = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "update", "--profile", "staging"])
+        .arg("--repository")
+        .arg(repository.path())
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert_success(&staging);
+    assert!(
+        data_dir
+            .join("registry/profiles/staging/current.json")
+            .is_file(),
+        "staging update writes only the staging profile"
+    );
 
     let production = Command::new(env!("CARGO_BIN_EXE_equalturn"))
         .args(["registry", "update", "--profile", "production"])
+        .arg("--repository")
+        .arg(repository.path())
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
         .arg("--data-dir")
         .arg(&data_dir)
         .env_remove("EQUALTURN_RELAY_URL")
         .output()
         .expect("Equalturn CLI starts");
     assert!(!production.status.success());
-    let production = String::from_utf8_lossy(&production.stderr);
-    assert!(production.contains("production registry trust not initialized"));
+    let production_error = String::from_utf8_lossy(&production.stderr);
+    assert!(production_error.contains("production registry trust not initialized"));
     assert!(
-        !data_dir.exists(),
-        "production profile must not initialize state"
+        !data_dir.join("registry/profiles/production").exists(),
+        "a staging root and repository must not initialize production state"
+    );
+
+    let production_status = Command::new(env!("CARGO_BIN_EXE_equalturn"))
+        .args(["registry", "status", "--profile", "production"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--root-sha256")
+        .arg(&repository.root_sha256)
+        .arg("--data-dir")
+        .arg(&data_dir)
+        .env_remove("EQUALTURN_RELAY_URL")
+        .output()
+        .expect("Equalturn CLI starts");
+    assert!(!production_status.status.success());
+    assert!(
+        String::from_utf8_lossy(&production_status.stderr)
+            .contains("production registry trust not initialized")
     );
 
     let staging = Command::new(env!("CARGO_BIN_EXE_equalturn"))
@@ -215,8 +262,14 @@ fn production_profile_fails_closed_and_staging_never_discovers_its_root() {
     let staging = String::from_utf8_lossy(&staging.stderr);
     assert!(staging.contains("out-of-band bootstrap root"));
     assert!(
-        !data_dir.exists(),
-        "missing root must be rejected before I/O"
+        data_dir
+            .join("registry/profiles/staging/current.json")
+            .is_file(),
+        "invalid staging input must leave the existing staging profile intact"
+    );
+    assert!(
+        !data_dir.join("registry/profiles/production").exists(),
+        "neither a staging root nor staging data may initialize production"
     );
 }
 
