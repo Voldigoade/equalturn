@@ -1,6 +1,6 @@
 # Production registry root ceremony
 
-**Status:** not authorized to run in the development environment; no production key has been generated.  
+**Status:** not authorized to run in the development environment; no production key has been generated.<br>
 This document is a future operational gate, not an invitation to create a key in this checkout.
 
 The current public staging repository is a standard-key, fixed-content Pages publication used only for Rust client interoperability. Its deploy job does not sign TUF metadata, and its test signer material is disposable. The earlier staging Sigstore/OIDC root was incompatible with the selected Rust verifier. Neither staging mode is a production signer design.
@@ -41,4 +41,3 @@ On root compromise or loss of threshold, stop the current repository. Do not acc
 - [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md)
 - [TUF-on-CI signer setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-SETUP.md)
 - [TUF-on-CI online-signing setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md)
-

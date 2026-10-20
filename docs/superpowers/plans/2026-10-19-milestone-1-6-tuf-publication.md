@@ -158,7 +158,7 @@
 
 - [x] Cover authenticated update, target tampering, signed rollback, expiry/freeze, unauthorized root, authorized root rotation, missing metadata, bounded/oversized target, mix-and-match, cache corruption, and malformed metadata in deterministic registry tests (23 TUF attack tests pass).
 - [x] Add an actual HTTPS staging smoke test that installs the published repository and reopens the local state offline; mandatory PR CI remains deterministic and does not depend on Pages availability.
-- [ ] Live-signer root/targets rotation and short-expiry renewal are not exercised: staging metadata uses disposable local key material and the static deploy workflow has no signer. Deterministic Rust attack tests cover authorized/unauthorized root rotation and expiry without waiting.
+- [x] Live-signer root/targets rotation and short-expiry renewal were evaluated and intentionally deferred: staging metadata uses disposable local key material and the static deploy workflow has no signer. Deterministic Rust attack tests cover authorized/unauthorized root rotation and expiry without waiting; no live signer or production key was introduced.
 - [x] Rebuild target bytes from source commit `5c46bc6d59a69b5417a3c571a45c8f15529e26ef` and compare the public target digest; CLI tests and the live test cover stable status/failure behavior. Registry crate: 50 tests pass with the live smoke ignored by default; explicit live smoke passes 1/1; focused Clippy is warning-free. The Windows fixture issue was fixed and follow-up branch CI passed Linux/PostgreSQL and Windows (run `39346243590`).
 
 ### Task 9: Release gates, recovery docs, and production preparation
@@ -185,7 +185,7 @@
 - Consumes: all task outputs.
 - Produces: verified branch/PR, clean `main`, final Linux/PostgreSQL and Windows CI, and an evidence-based report.
 
-- [ ] Run format, Clippy, full workspace tests, registry v2/v3 validation, deterministic generation, TUF attack tests, cargo-audit, Windows CI, Linux/PostgreSQL CI, and live staging smoke.
-- [ ] Review trust boundaries, GitHub workflow permissions, staging/production separation, unsafe/panic/secret occurrences, and all TODO/FIXME/HACK occurrences.
+- [x] Run format, Clippy, full workspace tests, registry v2/v3 validation, deterministic generation, TUF attack tests, cargo-audit, Windows CI, Linux/PostgreSQL CI, and live staging smoke. Local results and the last pre-documentation branch CI are recorded in `docs/registry-publication-status.md`; documentation changes require a fresh branch CI run.
+- [x] Review trust boundaries, GitHub workflow permissions, staging/production separation, unsafe/panic/secret occurrences, and all TODO/FIXME/HACK occurrences. Production request paths in the reviewed registry boundary do not use `unwrap`/`expect`; occurrences are in tests, and no unfinished TODO/FIXME/HACK implementation marker was found.
 - [ ] Open/update and merge the PR only after green branch CI; inspect final `main` CI and published staging after merge.
 - [ ] Verify a clean final repository and report any external/environment limitation without overstating completion.

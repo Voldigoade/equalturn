@@ -63,3 +63,23 @@ Milestone 1.6 stage commits, pushed branch heads, publication artifacts, CI runs
 - Stage 8 local TUF attack coverage: `crates/registry/tests/tuf_attacks.rs` contains deterministic coverage for signed rollback, expiration at injected time, target tampering, authorized and unauthorized root rotation, mix-and-match, malformed/oversized metadata and targets, and corrupted cache. After restoring the live smoke fixture, `cargo test -p equalturn-registry --locked -- --test-threads=1` passed 49 tests with the network-only test ignored by default; explicit live smoke passed 1/1, focused Clippy passed with warnings denied, and `cargo fmt --all -- --check` passed.
 - Stage 8 Windows portability correction: initial PR CI run [39345884460](https://github.com/Voldigoade/equalturn/actions/runs/39345884460) passed Linux/PostgreSQL but failed one Windows HTTP transport unit test because its local TCP fixture replied after consuming only the request line, leaving HTTP headers unread. The fixture now consumes the full bounded request header block; its new regression test and focused registry suite pass (50 passed, 1 network smoke ignored). Follow-up run [39346243590](https://github.com/Voldigoade/equalturn/actions/runs/39346243590) passed both Linux/PostgreSQL and Windows jobs. This changed test code only, not production transport behavior.
 
+## Final branch review checkpoint
+
+On 20 October 2026, the complete branch diff from baseline `e07bdd4` was reviewed, including the registry updater, HTTP transport, CLI trust profiles, installed-state handling, tests, and workflow permissions. A separate read-only security review found no actionable security findings in those boundaries. The staging root remains explicit and pinned; production remains fail-closed. No endpoint enforcement was added.
+
+Fresh local verification on `work/milestone-1.6-tuf-publication`:
+
+| Check | Observed result |
+| --- | --- |
+| `cargo fmt --all -- --check` | PASS |
+| `cargo clippy --workspace --all-targets --all-features --locked -- -D warnings` | PASS |
+| `cargo test --workspace --locked` with `TEST_DATABASE_URL` | PASS: 134 passed, 0 failed, 1 live network smoke ignored by default; the database-backed relay integration ran against a temporary PostgreSQL 17 container bound to loopback and capped at 1 GiB/1 CPU. The container was stopped after the test. |
+| `cargo test -p equalturn-registry --test staging_smoke --locked -- --ignored --nocapture` | PASS: live pinned-root HTTPS install and offline reopen, 1 passed |
+| Registry v2 validator | PASS: 129 entries, 132 provenance records, 58 structured indicators |
+| Registry v3 validator | PASS: 131 entries, 84 indicators, 0 warnings |
+| Registry validator test corpus | PASS: 46 tests |
+| Deterministic release target build and `--check` | PASS: 152,438 bytes; reproducible |
+| `cargo audit --file Cargo.lock` | PASS using `cargo-audit` 0.22.2 |
+| `git diff --check` | PASS after this documentation cleanup |
+
+The latest branch CI observed before this documentation-only checkpoint was run [39346872781](https://github.com/Voldigoade/equalturn/actions/runs/39346872781) on code commit `eeef473`: Linux/PostgreSQL and Windows both passed. The documentation checkpoint must still pass branch CI before integration. Main integration, the post-merge main CI run, and the main-branch staging smoke remain final gates.

@@ -1,6 +1,6 @@
 # Production registry trust policy
 
-**Status:** policy proposal; production trust remains uninitialized.  
+**Status:** policy proposal; production trust remains uninitialized.<br>
 **Reviewed:** 20 October 2026
 
 ## Current maintainer and key status
@@ -63,4 +63,3 @@ Before production publication, record (without secrets): the three custodians an
 - [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md) — local signer interactions and signing-event workflow; checked 19 October 2026.
 - [TUF-on-CI online-signing setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md) — current KMS integrations and Sigstore status; checked 19 October 2026.
 - [GitHub Pages custom workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) — workflow deployment and environment requirements; checked 20 October 2026.
-

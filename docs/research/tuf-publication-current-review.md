@@ -1,6 +1,6 @@
 # TUF publication and Rust client review
 
-**Checked:** 19 October 2026  
+**Checked:** 19 October 2026<br>
 **Scope:** TUF metadata specification, TUF-on-CI publication/signing, and the existing Rust TUF client boundary.
 
 ## Verified upstream facts
@@ -33,4 +33,3 @@ Context7 was queried for the Rust crate but did not provide a Rust-specific `sig
 - [TUF v1.0.37 specification](https://theupdateframework.github.io/specification/v1.0.37/) — current versioned specification page listed upstream on the check date.
 - [TUF-on-CI repository](https://github.com/theupdateframework/tuf-on-ci), [changelog](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/CHANGELOG.md), [repository maintenance manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md), and [template](https://github.com/theupdateframework/tuf-on-ci-template) — publisher status and repository/signing operations.
 - [`sigstore-tuf` 0.15.0 API docs](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/), [client docs](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/client/index.html), and [transport docs](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/transport/index.html) — Rust API and bounded transport behavior.
-
