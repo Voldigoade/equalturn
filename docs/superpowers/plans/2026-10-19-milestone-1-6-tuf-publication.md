@@ -4,7 +4,7 @@
 
 **Goal:** Establish an operational, independently verifiable staging TUF publication and an explicit HTTPS registry update path, while keeping production trust fail-closed until its offline signer ceremony.
 
-**Architecture:** Keep reviewed registry source and validation in Equalturn. Use a separately isolated TUF-on-CI staging repository for signed publication, with upstream workflows and no production keys. Extend the existing `equalturn-registry` crate with an HTTPS repository adapter and crash-safe installed-state boundary; route CLI commands through the selected trust profile and continue to use `sigstore-tuf` for all TUF verification.
+**Architecture:** Keep reviewed registry source and validation in Equalturn. Use a separately isolated staging repository with standard TUF keys and a fixed-content GitHub Pages deployment workflow; the deploy job does not sign metadata. Extend `equalturn-registry` with bounded HTTPS transport and crash-safe installed state, keep profile selection explicit, and use `sigstore-tuf` for all verification. Production remains fail-closed until its independent offline root ceremony.
 
 **Tech Stack:** Existing Rust workspace and `sigstore-tuf` 0.15.0; TUF-on-CI current upstream template/actions; GitHub Pages; existing registry v3 generator/validators; Tokio/reqwest already present in the lockfile through `sigstore-tuf`.
 
@@ -92,11 +92,13 @@
 - Consumes: Task 3 isolated repository and Task 2 non-production signer policy.
 - Produces: a staging root, signed role metadata, deterministic `registry-v3.json` target tied to an Equalturn source revision, and a public staging endpoint.
 
-- [ ] Initialize the actual repository with `tuf-on-ci-delegate sign/init` and non-production signers; do not handcraft repository metadata.
-- [ ] Generate the target from an exact reviewed Equalturn commit and record source SHA, registry semantic version, target hash, and publication URL.
-- [ ] Complete the signing event and publish through the template workflow; verify public root, timestamp, snapshot, targets metadata, target bytes, content types, and URLs independently.
-- [ ] Verify the published target hash against a fresh deterministic local build and run the Rust verifier against the staging root.
-- [ ] Record public key IDs/fingerprints only. Commit/push the ceremony evidence checkpoint.
+- [x] Initialize the staging repository with separate standard RSA-PSS-SHA256 role keys using `tuftool` 0.17.0. The previous OIDC state remains public history; it is not the current trust anchor.
+- [x] Generate the target from the reviewed registry source at commit `5c46bc6d59a69b5417a3c571a45c8f15529e26ef`; record semantic version, SHA-256, and publication URL in the registry status docs.
+- [x] Publish fixed metadata/target bytes through the restricted GitHub Pages workflow; independently fetch the public root and target and verify the HTTPS publication.
+- [x] Rebuild the source target deterministically and run the Rust verifier using the pinned staging root; live HTTPS install and offline reopen pass.
+- [x] Record public root/target digests only and document the non-production key-custody limitation.
+
+**Deviation:** TUF-on-CI's standard-key publish action rejected its expiry configuration (`x-tuf-on-ci-expiry-period`, staging run `39331918162`), while its earlier OIDC/TAP-18 root was incompatible with the Rust verifier. Staging now serves a one-time standard-key repository from a fixed allowlist on a branch-restricted Pages workflow. This is a deploy path, not an automated signer; no cryptography was replaced or bypassed. Production publication still requires a separately reviewed signer architecture.
 
 ### Task 5: HTTPS updater transport
 
@@ -154,10 +156,10 @@
 - Consumes: Tasks 4–7 staging root, HTTP updater, store and CLI.
 - Produces: repeatable local attack tests plus a live staging workflow that downloads and verifies published metadata and target bytes.
 
-- [ ] Cover authenticated update, target tampering, signed rollback, expiry/freeze, unauthorized root, authorized root rotation, missing target, oversized metadata, cache corruption, and interrupted update.
-- [ ] Add actual HTTPS end-to-end smoke against the published staging endpoint; mandatory PR CI remains deterministic and does not depend on external service availability.
-- [ ] Record live root/targets rotation and short-expiry operational tests using TUF-on-CI signing events where staging tooling allows them.
-- [ ] Verify source-to-target hash reproducibility and visible status on missing/stale service; commit/push the test checkpoint.
+- [x] Cover authenticated update, target tampering, signed rollback, expiry/freeze, unauthorized root, authorized root rotation, missing metadata, bounded/oversized target, mix-and-match, cache corruption, and malformed metadata in deterministic registry tests (23 TUF attack tests pass).
+- [x] Add an actual HTTPS staging smoke test that installs the published repository and reopens the local state offline; mandatory PR CI remains deterministic and does not depend on Pages availability.
+- [ ] Live-signer root/targets rotation and short-expiry renewal are not exercised: staging metadata uses disposable local key material and the static deploy workflow has no signer. Deterministic Rust attack tests cover authorized/unauthorized root rotation and expiry without waiting.
+- [x] Rebuild target bytes from source commit `5c46bc6d59a69b5417a3c571a45c8f15529e26ef` and compare the public target digest; CLI tests and the live test cover stable status/failure behavior. Registry crate: 49 tests pass, 1 live smoke test passes explicitly, and focused Clippy is warning-free.
 
 ### Task 9: Release gates, recovery docs, and production preparation
 

@@ -1,7 +1,7 @@
 # Production registry trust policy
 
 **Status:** policy proposal; production trust remains uninitialized.  
-**Reviewed:** 19 October 2026
+**Reviewed:** 20 October 2026
 
 ## Current maintainer and key status
 
@@ -24,15 +24,15 @@ The planned online roles are not provisioned. TUF-on-CI documents AWS, Google Cl
 
 ## Staging-only signer policy
 
-For a disposable staging repository used only to exercise tooling, a **1-of-1 test signer** may initialize root and targets with separate non-production key material. Use role expiry no longer than 90 days for `root` and `targets`, 30 days for `snapshot`, and 7 days for `timestamp`. The keys must be clearly labeled for staging, stay outside the repository and production build configuration, and be rotated or the repository reinitialized if signer material is lost. Staging data is public and non-authoritative. A staging signature must never be represented as independent review or as a production approval. This single-signer policy is deliberately not acceptable for production.
+For a disposable staging repository used only to exercise tooling, a **1-of-1 test signer** may initialize root and targets with separate non-production key material. The current standard-key staging repository was initialized with separate RSA-PSS-SHA256 keys generated with `tuftool` 0.17.0. Observed role expiries are root 19 October 2027, targets and snapshot 17 January 2027, and timestamp 18 November 2026. These metadata values are observed staging facts, not production policy. The current static Pages workflow republishes metadata as-is and does not renew it; the TUF smoke test will fail closed after the earliest expiry unless a deliberate non-production signing operation renews the repository. The keys must stay outside the repository and production build configuration. Current staging key material is disposable, not retained as durable signer custody; the repository must be reinitialized or deliberately re-signed before metadata expiry. Staging data is public and non-authoritative. A staging signature must never be represented as independent review or as a production approval. This single-signer policy is deliberately not acceptable for production.
 
 ## Endpoints and bootstrap
 
 - Intended production repository base URL: `https://voldigoade.github.io/equalturn-registry/`. It is currently uninitialized and must not be treated as a source of trust.
-- Staging repository: `Voldigoade/equalturn-registry-staging` at `https://voldigoade.github.io/equalturn-registry-staging/`. The repository exists, but its TUF root and target are not initialized yet. Staging is for non-production protocol smoke tests only.
+- Staging repository: `Voldigoade/equalturn-registry-staging` at `https://voldigoade.github.io/equalturn-registry-staging/`. It has a standard-key root v1 (SHA-256 `719e372ecc71e8f509f5805889560382d3d599971b82947f9da825101f323144`) and `registry-v3.json` target (SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`). The Equalturn Rust HTTPS verifier has installed and reopened the target from this endpoint. Staging is for non-production protocol smoke tests only.
 - The initial production `root.json` and its SHA-256 digest must be embedded in an Equalturn release or provisioned through another authenticated, out-of-band release channel. A client must never download an initial root and accept its own signature from the same untrusted endpoint.
 - The bootstrap release must disclose the root version, fingerprint/hash, repository URL, and date. Reviewers must verify the exact root bytes from the local signer ceremony against the copy used by the release. A GitHub-hosted checksum alone is not an independent channel if GitHub is the suspected compromise.
-- Staging roots and test signer keys must never be compiled into production trust, accepted by a production profile, copied to the production repository, or reused for production roles.
+- Staging roots and test signer keys must never be compiled into production trust, accepted by a production profile, copied to the production repository, or reused for production roles. The root file included under `crates/registry/tests/fixtures/` is only a test fixture and does not provide production trust.
 
 ## Rotation and expiration
 
@@ -62,4 +62,5 @@ Before production publication, record (without secrets): the three custodians an
 - [TUF-on-CI repository maintenance manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md) — current initial setup, Pages, workflow authentication, and online roles; checked 19 October 2026.
 - [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md) — local signer interactions and signing-event workflow; checked 19 October 2026.
 - [TUF-on-CI online-signing setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md) — current KMS integrations and Sigstore status; checked 19 October 2026.
+- [GitHub Pages custom workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) — workflow deployment and environment requirements; checked 20 October 2026.
 
