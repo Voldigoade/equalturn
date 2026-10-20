@@ -5,7 +5,20 @@
 
 ## Current state
 
-`Voldigoade/equalturn-registry` is the intended public TUF publication repository. Its default branch is `main`, and its current upstream-derived workflows are pinned to TUF-on-CI v0.21.0. It has no Equalturn root, keys, metadata, target, production Pages feed, or online signer. GitHub API access available to this review could read repository content but not Pages, Actions, or branch-protection settings; those settings must be checked through repository settings before initialization.
+`Voldigoade/equalturn-registry` is the intended public TUF publication repository. Its default branch is `main`, and its current upstream-derived workflows are pinned to TUF-on-CI v0.21.0. It has no Equalturn root, keys, metadata, target, production Pages feed, or online signer. The authenticated repository settings UI was inspected on 20 October 2026:
+
+| Setting | Production registry repo | Equalturn source repo | Proposed action before production signing |
+| --- | --- | --- | --- |
+| Default branch | `main` | `main` | Keep. |
+| GitHub Pages | Disabled | Not used by the registry client | Enable Actions publication only after the root/configuration ceremony, with the `github-pages` environment restricted to `publish`. |
+| Environments | None | Existing settings not relevant to TUF publication | Create `github-pages` and narrowly scoped online-signing environment only when production workflow is configured. |
+| Branch rulesets / classic protection | None | None | Add a `main` ruleset requiring pull requests and disallowing force-push/delete before root/target signing. Do not require an unavailable second reviewer under the proposed single-maintainer policy. |
+| Actions allowlist | All actions allowed; full-SHA requirement off | All actions allowed; full-SHA requirement off | Restrict the publication repo to actual upstream `theupdateframework/tuf-on-ci`, `actions/deploy-pages`, and `actions/create-github-app-token` references, and require full commit SHA pins. Equalturn workflows also use full SHAs; separate hardening is optional and outside the production publisher requirement. |
+| Default `GITHUB_TOKEN` | Read-only; PR create/approve disabled | Read-only; PR create/approve disabled | Preserve read-only default. TUF-on-CI signing needs PR creation; owner must choose between enabling the repo-level setting and operating a minimally scoped GitHub App. This is a security-sensitive access decision and is included in the owner gate. |
+| Secret scanning / push protection | Secret scanning and push protection enabled | Secret scanning and push protection enabled | Keep enabled. No production credentials belong in either repository. |
+| Dependency graph / Dependabot alerts | Off | On | Review whether alerts are useful in the publication repo; it contains TUF workflows and metadata but no application package graph. |
+
+These values were read from GitHub's authenticated settings UI; they were not inferred from workflow YAML. No settings were changed in this review.
 
 The public Equalturn commit history shows one author account, which is not a complete maintainer roster. No independently accountable signer roster or custody plan is documented. Do not claim multi-party security without named independent custodians and actual separate custody. No production key or cloud resource has been created or authorized.
 

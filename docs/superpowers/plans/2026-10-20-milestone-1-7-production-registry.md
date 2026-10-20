@@ -59,3 +59,10 @@ Each task is complete only after its relevant focused tests pass and its code/do
 - Defined proposed root/targets/snapshot/timestamp expiry and alert windows, explicit root renewal, fail-closed expiry semantics for installed data, role compromise impact, key backup/recovery rehearsal, GitHub/PIV/KMS boundaries, and privacy requirements.
 - Updated `registry-production-trust.md`, `production-root-ceremony.md`, `registry-disaster-recovery.md`, and contradicted sections of `registry-trust.md`. No production key/resource was created or configured.
 - Focused verification: `git diff --check` (record result after commit); manual review of trust claims against implementation (`load_installed_registry` expiry verification) and current upstream TUF-on-CI signer/maintenance manuals.
+
+#### GitHub repository settings inspection
+
+- Read-only authenticated browser inspection was performed for both repositories on 20 October 2026.
+- `equalturn-registry`: `main`; Pages disabled; no environments; no branch rulesets; default workflow token read-only and Actions PR creation disabled; all Actions allowed and full-SHA enforcement disabled; secret scanning and push protection enabled; dependency graph/Dependabot alerts disabled.
+- `equalturn`: `main`; no branch rulesets; default workflow token read-only and Actions PR creation disabled; all Actions allowed and full-SHA enforcement disabled; secret scanning, push protection, private vulnerability reporting, dependency graph, and Dependabot alerts enabled.
+- No setting was changed. The production policy now records the actions to take before signing. The owner gate must authorize enabling Actions PR creation or choosing a GitHub App, because this changes write access; the earlier staging-only approval does not cover production.
