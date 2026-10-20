@@ -92,6 +92,35 @@ mod tests {
     };
     use url::Url;
 
+    const MAX_REQUEST_HEAD_BYTES: usize = 16 * 1024;
+
+    fn read_http_request_head(reader: &mut impl Read) -> std::io::Result<Vec<u8>> {
+        let mut head = Vec::new();
+        let mut byte = [0_u8; 1];
+        loop {
+            if head.len() == MAX_REQUEST_HEAD_BYTES {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "test request headers exceed the size limit",
+                ));
+            }
+
+            match reader.read(&mut byte)? {
+                0 => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::UnexpectedEof,
+                        "test request ended before the header terminator",
+                    ));
+                }
+                _ => head.push(byte[0]),
+            }
+
+            if head.ends_with(b"\r\n\r\n") {
+                return Ok(head);
+            }
+        }
+    }
+
     fn response_server(response: Vec<u8>) -> (Url, thread::JoinHandle<()>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("test listener binds");
         let address = listener
@@ -117,18 +146,17 @@ mod tests {
         let server = thread::spawn(move || {
             for _ in 0..count {
                 let (mut stream, _) = listener.accept().expect("test request arrives");
-                let mut request = Vec::new();
-                let mut byte = [0_u8; 1];
-                while stream.read(&mut byte).expect("request reads") == 1 {
-                    request.push(byte[0]);
-                    if request.ends_with(b"\r\n") {
-                        break;
-                    }
-                }
+                let head = read_http_request_head(&mut stream).expect("request headers read");
+                let line_end = head
+                    .windows(2)
+                    .position(|bytes| bytes == b"\r\n")
+                    .expect("HTTP request line ends with CRLF");
+                let request = String::from_utf8(head[..line_end + 2].to_vec())
+                    .expect("request line is UTF-8");
                 observed_requests
                     .lock()
                     .expect("request collection lock succeeds")
-                    .push(String::from_utf8(request).expect("request line is UTF-8"));
+                    .push(request);
                 stream
                     .write_all(
                         b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -238,6 +266,17 @@ mod tests {
                 .is_err()
         );
         server.join().expect("test server exits");
+    }
+
+    #[test]
+    fn reads_complete_request_headers_before_replying() {
+        let request = b"GET /repository/metadata/timestamp.json HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n";
+        let mut input = std::io::Cursor::new(request);
+
+        assert_eq!(
+            read_http_request_head(&mut input).expect("request header block reads"),
+            request
+        );
     }
 
     #[tokio::test]
