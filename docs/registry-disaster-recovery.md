@@ -32,7 +32,13 @@ Never recover by deleting a client's metadata floor and silently accepting a new
 
 ## Key roles and custody boundaries
 
-Production policy is proposed as root 2-of-3 and targets 2-of-3, with separate online snapshot and timestamp identities. No production keys or signer roster currently exist. Do not lower thresholds to recover availability. The planned incident contacts and private-key recovery procedures must be confirmed by the actual custodians before production publication.
+No production keys, TUF root, online KMS role, or signed release currently exists. The recommended initial proposal is a single accountable maintainer using standard PIV root/targets keys through TUF-on-CI, with 1-of-1 thresholds and separate role keys. This explicitly provides no independent multi-party threshold protection; do not claim otherwise. The proposal requires a tested offline recovery path. The owner must confirm or replace it before production initialization. If a genuinely independent signer group is later established, the role thresholds can be migrated through an authorized root update.
+
+The proposed online `snapshot` and `timestamp` roles use separate OIDC-to-KMS identities with permission only for their respective TUF role. The recommended initial provider is AWS KMS; GCP/Azure are supported alternatives. No provider, account, key, or OIDC role has been authorized or provisioned. The static staging root/signatures and staging workflows are not production custody.
+
+## Expiry and prior install semantics
+
+Equalturn currently rejects expired metadata for both refresh and installed-state verification. On expiry, it does not treat previously installed bytes as current trusted registry data; it fails closed. Network failure preserves the previous atomic install, but the old install remains usable only if signatures, rollback state, and expiry still validate. Missing, expired, corrupted, or unverifiable state cannot be used for future enforcement. A future historical-view feature would need a separate explicit non-trust status and cannot reuse the current `VALID` status.
 
 The staging repository is intentionally different: it has a one-signature standard-key root and static metadata created for compatibility testing. Its Pages deploy workflow has no signing keys and does not renew metadata. Current staging timestamp metadata expires 18 November 2026; targets and snapshot expire 17 January 2027; root expires 19 October 2027. The staging signing material is disposable and not a durable custody arrangement. Reinitializing staging requires updating the test root and digest intentionally and rerunning Rust verification. Never compile that root into production or reuse its keys for production.
 

@@ -1,65 +1,69 @@
 # Production registry trust policy
 
-**Status:** policy proposal; production trust remains uninitialized.<br>
+**Status:** recommended policy for owner decision; production trust remains uninitialized.<br>
 **Reviewed:** 20 October 2026
 
-## Current maintainer and key status
+## Current state
 
-The public Equalturn commit history currently shows one author account. That is not a complete collaborator or maintainer roster, and it does not prove only one person maintains the project. However, no independently accountable signer roster or custody arrangement has been established in the repository. It would be misleading to claim a multi-person threshold today. Accordingly, **no production root or production role keys are authorized or created**. Production registry updates remain unavailable until the conditions below are met.
+`Voldigoade/equalturn-registry` is the intended public TUF publication repository. Its default branch is `main`, and its current upstream-derived workflows are pinned to TUF-on-CI v0.21.0. It has no Equalturn root, keys, metadata, target, production Pages feed, or online signer. GitHub API access available to this review could read repository content but not Pages, Actions, or branch-protection settings; those settings must be checked through repository settings before initialization.
 
-## Proposed production roles
+The public Equalturn commit history shows one author account, which is not a complete maintainer roster. No independently accountable signer roster or custody plan is documented. Do not claim multi-party security without named independent custodians and actual separate custody. No production key or cloud resource has been created or authorized.
 
-These are prerequisites for a future production ceremony, not current settings. Role values and expiration periods are project policy, not mandated by TUF.
+## Recommended initial role policy
 
-| Role | Planned threshold | Separation and custody | Planned expiry |
+This is a proposed configuration, not metadata already in production. Role thresholds and expiries are project policy, not TUF requirements. Given the absence of a demonstrated independent signer roster, an honest initial policy is 1-of-1 for root and targets, with the single-custodian compromise limitation stated plainly. Do not create multiple keys under one person's control and describe them as independent threshold security. If maintainers later establish separate governance and custody, migrate through an authorized root update.
+
+| Role | Recommended initial policy | Expiry and renewal | Authority and compromise impact |
 | --- | --- | --- | --- |
-| `root` | 2 of 3 | Three named, independently accountable maintainers; separate offline hardware-backed signing keys; root keys never available to CI or a cloud KMS. | 2 years; begin review/renewal at 1 year. |
-| top-level `targets` | 2 of 3 | Three human signers review target bytes, source commit, validation, semantic diff, and release notes before signing. Use keys distinct from root keys; no broad delegation for v1. | 180 days; re-sign during an approved release or deliberate renewal. |
-| `snapshot` | 1 of 1 | Dedicated OIDC-federated cloud KMS identity restricted to the publication repository, protected workflow, branch, and environment. Key is limited to snapshot metadata. | 30 days. |
-| `timestamp` | 1 of 1 | A separate OIDC-federated identity/key from snapshot, limited to timestamp metadata. | 7 days. |
+| `root` | Threshold 1; one owner-operated PIV hardware signer using TUF-on-CI's supported standard TUF signature path. Never available to CI or KMS. Keep a tested, encrypted offline recovery copy through a documented supported key import/export process; if recoverability cannot be demonstrated, defer initialization. | 2 years; start review/renewal 180 days before expiry. Root renewal/rotation always requires an explicit human signing event. | Authorizes all role keys and thresholds. Root compromise permits complete repository takeover. Root loss cannot be recovered inside the TUF chain without a usable authorized recovery copy. |
+| top-level `targets` | Threshold 1; a distinct PIV key from root, held by the maintainer. Require registry PR review, deterministic build, and source/digest review before the signing event. | 180 days; begin re-signing 60 days before expiry. | Authorizes registry target bytes. Compromise can publish false or harmful but valid research data; it cannot replace the root role key set. |
+| `snapshot` | Threshold 1; a distinct OIDC-federated AWS KMS key/role with only snapshot signing permission. Restrict trust to the exact publication repository, branch, workflow, and protected environment. | 30 days; TUF-on-CI's scheduled workflow renews several times per day; alert if less than 14 days remain. | Authenticates repository metadata consistency. Compromise may disrupt freshness or metadata state but cannot authorize new targets or root keys. |
+| `timestamp` | Threshold 1; a separate OIDC-federated AWS KMS key/role with only timestamp signing permission and the same narrow identity restrictions. | 7 days; scheduled renewal several times per day; alert if less than 72 hours remain. | Provides freshness. Compromise can cause freeze/availability issues within its authorization; it cannot authorize target bytes or replace root. |
 
-Do not perform the production root ceremony until three custodians have explicitly accepted the responsibilities and have tested their separate hardware signing setup. If that roster cannot be assembled, keep the production endpoint empty and do not weaken the threshold to make a release possible. A 1-of-1 production root would have no tolerance for key theft or maintainer compromise and is not an acceptable shortcut for this project.
+TUF-on-CI supports AWS KMS, Google Cloud KMS, and Azure Key Vault OIDC flows. AWS KMS is the initial recommendation because the template exposes an AWS OIDC role input and can avoid long-lived cloud credentials. This requires an AWS account and may incur charges. The owner may choose GCP or Azure instead. Sigstore online signing is not selected: TUF-on-CI calls it experimental and warns that not all TUF clients support it; the staging TAP-18 root was rejected by Equalturn's current Rust verifier. If no supported standard-key compatible online signer is authorized and configured, keep the production repository uninitialized rather than storing static online keys in GitHub Secrets or claiming an unrenewable static feed is production-ready.
 
-The planned online roles are not provisioned. TUF-on-CI documents AWS, Google Cloud, and Azure KMS integrations; Sigstore online signing is documented as experimental. Select a provider only after reviewing its current trust conditions and ensuring the identity cannot sign root or targets. Avoid static GitHub repository secrets for long-lived private keys. If online roles are not configured, publication may be delayed; do not substitute a developer workstation secret.
+PIV is required by TUF-on-CI's documented local signer. The owner has not confirmed possession of compatible hardware. Confirm the exact PIV key type, role key separation, recovery process, tool version, and Rust-client compatibility in a disposable rehearsal before production signing. TUF-on-CI documents the local signing tool and hardware PIV; do not assume a generic encrypted software key file is a supported TUF-on-CI signer.
 
-## Staging-only signer policy
+## Role and workflow boundaries
 
-For a disposable staging repository used only to exercise tooling, a **1-of-1 test signer** may initialize root and targets with separate non-production key material. The current standard-key staging repository was initialized with separate RSA-PSS-SHA256 keys generated with `tuftool` 0.17.0. Observed role expiries are root 19 October 2027, targets and snapshot 17 January 2027, and timestamp 18 November 2026. These metadata values are observed staging facts, not production policy. The current static Pages workflow republishes metadata as-is and does not renew it; the TUF smoke test will fail closed after the earliest expiry unless a deliberate non-production signing operation renews the repository. The keys must stay outside the repository and production build configuration. Current staging key material is disposable, not retained as durable signer custody; the repository must be reinitialized or deliberately re-signed before metadata expiry. Staging data is public and non-authoritative. A staging signature must never be represented as independent review or as a production approval. This single-signer policy is deliberately not acceptable for production.
+Separate four decisions:
 
-## Endpoints and bootstrap
+1. **Content review:** source registry, authoritative provenance, semantic diff, validator output, deterministic target digest, and reviewer approval in Equalturn.
+2. **Release authorization:** a TUF-on-CI `sign/**` event that contains only the reviewed target and metadata changes. Root/targets signatures are human decisions; GitHub Actions does not choose content.
+3. **Online renewal:** a dedicated workflow uses GitHub OIDC to assume separate snapshot/timestamp KMS permissions. No root/targets material or long-lived cloud credentials enter CI.
+4. **Client trust:** Equalturn embeds the exact public root bytes and digest and uses only `https://voldigoade.github.io/equalturn-registry/`. The URL or a remote root never bootstraps trust.
 
-- Intended production repository base URL: `https://voldigoade.github.io/equalturn-registry/`. It is currently uninitialized and must not be treated as a source of trust.
-- Staging repository: `Voldigoade/equalturn-registry-staging` at `https://voldigoade.github.io/equalturn-registry-staging/`. It has a standard-key root v1 (SHA-256 `719e372ecc71e8f509f5805889560382d3d599971b82947f9da825101f323144`) and `registry-v3.json` target (SHA-256 `e6ccf57eca33951cd6b7a04e7e609f981c87c73298b7923b4d5a9a845caa02a0`). The Equalturn Rust HTTPS verifier has installed and reopened the target from this endpoint. Staging is for non-production protocol smoke tests only.
-- The initial production `root.json` and its SHA-256 digest must be embedded in an Equalturn release or provisioned through another authenticated, out-of-band release channel. A client must never download an initial root and accept its own signature from the same untrusted endpoint.
-- The bootstrap release must disclose the root version, fingerprint/hash, repository URL, and date. Reviewers must verify the exact root bytes from the local signer ceremony against the copy used by the release. A GitHub-hosted checksum alone is not an independent channel if GitHub is the suspected compromise.
-- Staging roots and test signer keys must never be compiled into production trust, accepted by a production profile, copied to the production repository, or reused for production roles. The root file included under `crates/registry/tests/fixtures/` is only a test fixture and does not provide production trust.
+The current upstream workflow grants empty workflow-level permissions and narrowly scoped job permissions: online signing uses `id-token`, `contents`, and `actions`; signing events use `contents`, `pull-requests`, and `actions`; failure status updates use `issues` and `contents: read`. Keep those job boundaries and full-SHA action pins. TUF-on-CI requires GitHub Actions to create/approve pull requests when using its default token, or a configured GitHub App for stricter branch protection. Select and configure one explicitly. Restrict the Pages `github-pages` environment to the `publish` branch and verify the Actions write and OIDC trust settings before first initialization.
 
-## Rotation and expiration
+## Expiry, stale state, and privacy
 
-TUF root rotation must follow the version-by-version authorized chain: each new root is signed by the threshold of the trusted previous root and by its own new root threshold. Keep each versioned root metadata file required by the TUF repository so outdated clients can advance. Role metadata updates must be authorized by the delegating role. Run and inspect a root-rotation smoke test before the first production release.
+The client rejects expired metadata for refresh and for installed-state verification. An expired or unavailable feed therefore cannot be shown as current trusted data; it is not silently accepted for advisory use, and future enforcement must never use it. A future product UX may preserve non-authoritative historical display only if it is explicitly marked expired and cannot enter a trust decision. This milestone does not change that behavior.
 
-The client uses its current wall clock for expiry validation. A bad local clock can reject fresh metadata or make expiration semantics unreliable; reports must describe the observed clock/expiry state and must not silently accept expired metadata. On network failure, a previously installed registry can be shown only when its persisted root/metadata state re-verifies and is still within policy. It must be labeled with its last successful refresh and expiry; expired or unverifiable state is not current trusted data.
+The client clock is part of expiry evaluation. Clock skew may reject current data or delay expiry detection; the CLI must show a stable expiry/error state and must not waive checks. A network failure must preserve the prior atomic install, but that install is only usable if the complete stored TUF chain remains valid and unexpired. Corrupt/unverifiable cache state fails closed. Losing the metadata version floor can weaken rollback protection; do not silently reset it.
 
-## Incident response
+Registry retrieval is an explicit public request. It must not include nickname, session/participant IDs, relay identity, event/report data, CTF target, or search query. TUF signatures authenticate publication authorization and bytes, not factual accuracy, indicator quality, or safe enforcement. Registry entries remain research data disconnected from enforcement.
 
-| Incident | Response |
-| --- | --- |
-| Mirror, Pages, or GitHub repository compromise | Treat it as availability/content-delivery compromise. TUF clients reject altered content; restore hosting and publish from the reviewed signer workflow. Investigate repository and workflow changes. |
-| One offline root or targets signer lost/compromised | Use the remaining authorized root threshold to rotate the root and affected role keys; remove the old key, preserve verified evidence, and publish an out-of-band notice. |
-| Root threshold compromised | Stop accepting the old repository identity. Release a new authenticated application trust anchor through an independent channel and announce the old root/repository as revoked. TUF cannot repair a compromised root by trusting a replacement root fetched from the compromised repository. |
-| Snapshot/timestamp identity compromised | Stop the affected workflow identity, rotate the role through root-authorized metadata, and inspect version/expiry behavior. Do not let the online role acquire root/targets signing authority. |
-| Registry contains a mistaken or harmful but correctly signed record | Review and correct the source registry; publish a new semantic version and target through the normal target threshold. TUF proves authorization and byte integrity, not truth or safe enforcement. |
-| Production root quorum lost | There is no safe recovery inside the existing root chain. Establish a new repository identity only through a separately authenticated application release; explicitly retire the old endpoint. |
-| Metadata expires before renewal | Fail closed for current trust. Restore signer availability and issue authorized fresh metadata. Do not extend acceptance locally or disable expiry checks. |
+## Expiry monitoring and renewal
 
-## Release gate
+After a trusted production root is embedded, run a credential-free scheduled check against the canonical public TUF repository using that pinned root and the Rust verifier. It should alert before the thresholds above, fail when metadata is missing/expired/unverifiable, and publish only public role versions/expiries and target digest. The check must be separate from mandatory deterministic PR CI and must never accept a root or metadata merely to inspect expiry. TUF-on-CI's online workflow runs several times per day; an automated timestamp/snapshot renewal is not a substitute for human root/targets review. Root rotation is never scheduled automatically.
 
-Before production publication, record (without secrets): the three custodians and role responsibilities; root and target public-key fingerprints; expiry values; hardware signer verification; protected repository/workflow settings; online identity scope; successful authorized rotation; source commit and deterministic target digest; two-person-or-more target review; published HTTPS smoke test; and the exact root bytes/hash included in the application trust anchor. The production root private keys must be generated and kept outside this development environment. The specific human/offline procedure is in [production-root-ceremony.md](production-root-ceremony.md).
+## Key lifecycle and incident response
 
-## References
+- Generate root/targets material only through the documented TUF-on-CI signer on the owner's controlled PIV environment. Private material never enters this checkout, chat, CI, GitHub Issues, PRs, Actions logs, build artifacts, or the publication repository.
+- Maintain one encrypted offline recovery copy in a separate physical/storage location where the selected PIV method permits a supported recoverable import. Perform a disposable recovery rehearsal without exposing production bytes. Record only public key IDs/fingerprints and verification results.
+- Recheck the exact signer and KMS trust policy at each workflow upgrade. Remove compromised online identities immediately, then rotate the affected delegated role through root-authorized metadata.
+- For compromised targets, correct content with a higher semantic/metadata version; never roll back TUF version numbers. For bad but valid content, TUF cannot determine truth.
+- For compromised/lost root without a valid offline recovery path, stop the repository and ship a new independently authenticated application trust anchor. TUF cannot repair a compromised root by fetching another root from the same repository.
+- For GitHub/Pages compromise, treat it as denial/content-delivery risk unless an authorized signer or OIDC role was also compromised. Restore publication only after reviewing repo history, workflows, OIDC claims, and metadata through the pinned Rust client.
+- For expired metadata, fail closed for updates and installed trusted use. Restore an authorized renewal; never patch expiry locally.
 
-- [TUF v1.0.37 specification](https://theupdateframework.github.io/specification/v1.0.37/) — root rotation, thresholds, expiry, and consistent repository state; checked 19 October 2026.
-- [TUF-on-CI repository maintenance manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md) — current initial setup, Pages, workflow authentication, and online roles; checked 19 October 2026.
-- [TUF-on-CI signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md) — local signer interactions and signing-event workflow; checked 19 October 2026.
-- [TUF-on-CI online-signing setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md) — current KMS integrations and Sigstore status; checked 19 October 2026.
-- [GitHub Pages custom workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages) — workflow deployment and environment requirements; checked 20 October 2026.
+## Production initialization gate
+
+Before `tuf-on-ci-delegate sign/init`, the owner must confirm root/targets threshold and physical custody, a compatible PIV signer and recoverability, online KMS provider/account and exact costs, GitHub workflow and Pages settings, role expiry/re-sign values, and the application channel that will distribute the root. Staging-only approvals do not authorize any of these production actions. Do not generate a production key or provision cloud resources until that explicit decision.
+
+## Sources checked 20 October 2026
+
+- [TUF v1.0.37 specification](https://theupdateframework.github.io/specification/v1.0.37/)
+- [TUF-on-CI v0.21.0 repository maintenance](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/REPOSITORY-MAINTENANCE.md), [signer setup](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-SETUP.md), [signer manual](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/SIGNER-MANUAL.md), and [online signing](https://github.com/theupdateframework/tuf-on-ci/blob/main/docs/ONLINE-SIGNING-SETUP.md)
+- [`sigstore-tuf` 0.15.0](https://docs.rs/sigstore-tuf/0.15.0/sigstore_tuf/)
+- [GitHub OIDC security hardening](https://docs.github.com/en/actions/security-for-github-actions/security-hardening-your-deployments/about-security-hardening-with-openid-connect)

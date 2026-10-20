@@ -51,3 +51,11 @@ Each task is complete only after its relevant focused tests pass and its code/do
 - Context7 lookup did not return an exact TUF-on-CI or `sigstore-tuf` library entry; upstream manuals, current workflow, pinned Rust crate docs/source, and staging run evidence were used.
 - Focused verification for this documentation-only task: `git diff --check` (record result after commit). No code/CI behavior changed. The repository's mandatory CI triggers on `main` push, PR to `main`, or manual dispatch; this branch push alone is not expected to start CI.
 - Plan checkpoint: `3deeac7e243c0a6ed466563b6ae18a459620653a` (`docs: plan milestone 1.7 production registry trust`), pushed to `work/milestone-1.7-production-registry`.
+
+### Task 2a — production trust policy and recovery documentation
+
+- Corrected the earlier proposal that required three custodians even though no independent maintainer roster was established. Current recommendation is 1-of-1 root and targets under one actual custodian, with explicit single-custodian compromise/loss limitations; the owner must confirm it before any key operation. No artificial keys or threshold claims.
+- Selected TUF-on-CI v0.21.0 `sign/init` and its PIV human signer path for production standard TUF signatures; retained `sigstore-tuf` 0.15.0 and rejected experimental TAP-18 for compatibility reasons. Recommended but unprovisioned AWS KMS through GitHub OIDC for distinct snapshot/timestamp roles; costs and account authorization remain for the owner gate.
+- Defined proposed root/targets/snapshot/timestamp expiry and alert windows, explicit root renewal, fail-closed expiry semantics for installed data, role compromise impact, key backup/recovery rehearsal, GitHub/PIV/KMS boundaries, and privacy requirements.
+- Updated `registry-production-trust.md`, `production-root-ceremony.md`, `registry-disaster-recovery.md`, and contradicted sections of `registry-trust.md`. No production key/resource was created or configured.
+- Focused verification: `git diff --check` (record result after commit); manual review of trust claims against implementation (`load_installed_registry` expiry verification) and current upstream TUF-on-CI signer/maintenance manuals.
