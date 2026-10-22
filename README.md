@@ -1,3 +1,4 @@
+# ⚠️ Alpha Release - This is an alpha version, not yet a v1.
 # Equalturn
 
 Equalturn is a privacy-conscious integrity session system for people who mutually agree to compete without AI assistance. It gives participants pseudonymous session identities and a shared, signed record of events accepted by a relay.
